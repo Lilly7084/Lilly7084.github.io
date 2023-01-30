@@ -1,0 +1,173 @@
+<!-- Layout -->
+<svg viewBox="0 0 200 100">
+    <g id="audio_scope" transform="translate(5, 5)" width="190" height="90" />
+</svg>
+
+<!-- Style -->
+<style>
+    .scope_meter--box {
+        fill: none;
+        stroke: black;
+        stroke-width: 1;
+        stroke-linecap: round;
+    }
+
+    .scope_meter--trace {
+        fill: none;
+        stroke: black;
+        stroke-width: 0.5;
+        stroke-linecap: round;
+    }
+
+    .scope_meter--text {
+        font-family: "Ubuntu Mono";
+        font-weight: bold;
+        fill: black;
+        stroke: none;
+    }
+</style>
+
+<!-- Behavior -->
+<script>
+    class Oscilloscope
+    {
+        constructor(id, width, height)
+        {
+            const target = document.getElementById(id);
+            this.width = width;
+            this.height = height;
+            this.gain = 1;
+
+            // Container
+            const box = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            box.setAttribute("class", "scope_meter--box");
+            box.setAttribute("x", "0");
+            box.setAttribute("y", "0");
+            box.setAttribute("rx", "4");
+            box.setAttribute("width", width);
+            box.setAttribute("height", height);
+            target.appendChild(box);
+
+            // Path
+            this.path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            this.path.setAttribute("class", "scope_meter--trace");
+            target.appendChild(this.path);
+
+            const textContainer = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            textContainer.setAttribute("class", "scope_meter--text");
+            textContainer.setAttribute("y", "2");
+            textContainer.setAttribute("font-size", "5");
+            target.appendChild(textContainer);
+
+            const numLines = 3;
+            this.text = [];
+            for (let i = 0; i < numLines; i++) {
+                const textLine = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+                textLine.setAttribute("x", "2");
+                textLine.setAttribute("dy", "5");
+                textContainer.appendChild(textLine);
+                this.text.push(textLine);
+            }
+        }
+
+        update_shape(data)
+        {
+            var min = Infinity;
+            var max = -Infinity;
+            for (const value of data) {
+                if (min > value) min = value;
+                if (max < value) max = value;
+            }
+
+            const strength = Math.max(max, -min);
+            const maxGain = 10;
+            const gain = Math.min(maxGain, 0.8 / strength);
+            if (this.gain < gain) this.gain += 0.001;
+            if (this.gain > gain) this.gain = gain;
+
+            const g1 = Math.round(this.gain * 100) / 100;
+            this.text[0].innerHTML = `Current gain: ${g1}x`;
+            const g2 = Math.round(gain * 100) / 100;
+            this.text[1].innerHTML = `Maximum gain for current frame: ${g2}x`;
+            this.text[2].innerHTML = `Shape data contains ${data.length} sample points`;
+
+            const delta_x = this.width / (data.length - 1);
+            var d = "M";
+            for (const [index, value] of Object.entries(data)) {
+                const x = delta_x * index;
+                const y = (1 - value * this.gain) * (this.height - 4) / 2 + 2;
+                d += `${x} ${y}, `;
+            }
+            this.path.setAttribute("d", d);
+        }
+    }
+
+    const events = ["touchstart", "touchend", "mousedown", "keydown"];
+
+    var notice;
+
+    var ctx;
+    var analyser;
+    var microphone;
+    var sampleBuffer;
+    var waveformScope;
+
+    function update()
+    {
+        var sampleBuffer = new Float32Array(analyser.frequencyBinCount);
+        analyser.getFloatTimeDomainData(sampleBuffer);
+        waveformScope.update_shape(sampleBuffer.map((v, i, a) => v * 0.6));
+
+        requestAnimationFrame(update);
+    }
+
+    function onStreamAcquire(stream)
+    {
+        microphone = ctx.createMediaStreamSource(stream);
+
+        analyser = ctx.createAnalyser();
+        analyser.fftSize = 2048;
+        microphone.connect(analyser); // Forgot the fucking aux cable, my bad
+
+        const bufferLength = analyser.frequencyBinCount;
+        sampleBuffer = new Float32Array(bufferLength);
+
+        waveformScope = new Oscilloscope("audio_scope", 190, 90);
+
+        requestAnimationFrame(update);
+    }
+
+    function onStreamError(error)
+    {
+        console.error(error);
+        alert("This page needs your microphone to function, but your browser cannot find a suitable microphone");
+    }
+
+    function onAudioReady()
+    {
+        document.body.removeChild(notice);
+        events.forEach(e => document.body.removeEventListener(e, onAudioReady));
+
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+        if (!navigator.mediaDevices) {
+            alert("This page needs your microphone to function, but that feature is unsupported by your browser");
+            return;
+        }
+
+        // TODO: Make sure we're in a secure context before letting ourselves look like fools
+        navigator.mediaDevices.getUserMedia({"audio": true})
+            .then(onStreamAcquire)
+            .catch(onStreamError);
+    }
+
+    function setup()
+    {
+        notice = document.createElement("p");
+        notice.textContent = "Please click to let WebAudio work.";
+        document.body.appendChild(notice);
+        events.forEach(e => document.body.addEventListener(e, onAudioReady, false));
+    }
+
+    setup();
+</script>

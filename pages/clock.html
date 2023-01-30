@@ -1,0 +1,197 @@
+<svg viewBox="-100 -100 200 200">
+    <circle class="faceplate" cx="0" cy="0" r="90" />
+    <circle class="minute_ticks" cx="0" cy="0" r="85" pathLength="60" />
+    <circle class="hour_ticks" cx="0" cy="0" r="82" pathLength="60" />
+    <rect class="display_window" x="-32" y="25" width="64" height="30" rx="2.5" />
+
+    <g id="digital_clock" transform="translate(0, 40) skewX(-10)">
+        <g class="seven_segment clock_10h" transform="translate(-21, 0)">
+            <polygon class="seven_segment--0" points="-4,-8 -3,-9  3,-9  4,-8  3,-7 -3,-7" />
+            <polygon class="seven_segment--1" points=" 4,-8  5,-7  5,-1  4, 0  3,-1  3,-7" />
+            <polygon class="seven_segment--2" points=" 4, 0  5, 1  5, 7  4, 8  3, 7  3, 1" />
+            <polygon class="seven_segment--3" points=" 4, 8  3, 9 -3, 9 -4, 8 -3, 7  3, 7" />
+            <polygon class="seven_segment--4" points="-4, 8 -5, 7 -5, 1 -4, 0 -3, 1 -3, 7" />
+            <polygon class="seven_segment--5" points="-4, 0 -5,-1 -5,-7 -4,-8 -3,-7 -3,-1" />
+            <polygon class="seven_segment--6" points="-4, 0 -3,-1  3,-1  4, 0  3, 1 -3, 1" />
+        </g>
+
+        <g class="seven_segment clock_1h" transform="translate(-8, 0)">
+            <polygon class="seven_segment--0" points="-4,-8 -3,-9  3,-9  4,-8  3,-7 -3,-7" />
+            <polygon class="seven_segment--1" points=" 4,-8  5,-7  5,-1  4, 0  3,-1  3,-7" />
+            <polygon class="seven_segment--2" points=" 4, 0  5, 1  5, 7  4, 8  3, 7  3, 1" />
+            <polygon class="seven_segment--3" points=" 4, 8  3, 9 -3, 9 -4, 8 -3, 7  3, 7" />
+            <polygon class="seven_segment--4" points="-4, 8 -5, 7 -5, 1 -4, 0 -3, 1 -3, 7" />
+            <polygon class="seven_segment--5" points="-4, 0 -5,-1 -5,-7 -4,-8 -3,-7 -3,-1" />
+            <polygon class="seven_segment--6" points="-4, 0 -3,-1  3,-1  4, 0  3, 1 -3, 1" />
+        </g>
+
+        <circle cx="0" cy="-3.5" r="1.25" fill="#ff2020" class="seven_segment clock_colon" />
+        <circle cx="0" cy="3.5" r="1.25" fill="#ff2020" class="seven_segment clock_colon" />
+
+        <g class="seven_segment clock_10m" transform="translate(8, 0)">
+            <polygon class="seven_segment--0" points="-4,-8 -3,-9  3,-9  4,-8  3,-7 -3,-7" />
+            <polygon class="seven_segment--1" points=" 4,-8  5,-7  5,-1  4, 0  3,-1  3,-7" />
+            <polygon class="seven_segment--2" points=" 4, 0  5, 1  5, 7  4, 8  3, 7  3, 1" />
+            <polygon class="seven_segment--3" points=" 4, 8  3, 9 -3, 9 -4, 8 -3, 7  3, 7" />
+            <polygon class="seven_segment--4" points="-4, 8 -5, 7 -5, 1 -4, 0 -3, 1 -3, 7" />
+            <polygon class="seven_segment--5" points="-4, 0 -5,-1 -5,-7 -4,-8 -3,-7 -3,-1" />
+            <polygon class="seven_segment--6" points="-4, 0 -3,-1  3,-1  4, 0  3, 1 -3, 1" />
+        </g>
+
+        <g class="seven_segment clock_1m" transform="translate(21, 0)">
+            <polygon class="seven_segment--0" points="-4,-8 -3,-9  3,-9  4,-8  3,-7 -3,-7" />
+            <polygon class="seven_segment--1" points=" 4,-8  5,-7  5,-1  4, 0  3,-1  3,-7" />
+            <polygon class="seven_segment--2" points=" 4, 0  5, 1  5, 7  4, 8  3, 7  3, 1" />
+            <polygon class="seven_segment--3" points=" 4, 8  3, 9 -3, 9 -4, 8 -3, 7  3, 7" />
+            <polygon class="seven_segment--4" points="-4, 8 -5, 7 -5, 1 -4, 0 -3, 1 -3, 7" />
+            <polygon class="seven_segment--5" points="-4, 0 -5,-1 -5,-7 -4,-8 -3,-7 -3,-1" />
+            <polygon class="seven_segment--6" points="-4, 0 -3,-1  3,-1  4, 0  3, 1 -3, 1" />
+        </g>
+    </g>
+
+    <g id="hour_hand">
+        <line class="hand" x1="0" y1="0" x2="0" y2="-40" />
+    </g>
+    <g id="minute_hand">
+        <line class="hand" x1="0" y1="0" x2="0" y2="-55" />
+    </g>
+    <g id="second_hand">
+        <line class="hand hand--second" x1="0" y1="0" x2="0" y2="-70" />
+    </g>
+
+    <circle class="spindle" cx="0" cy="0" r="3" />
+</svg>
+
+<style>
+    body {
+        background: #dedede;
+    }
+
+    .faceplate {
+        fill: white;
+        stroke: black;
+        stroke-width: 1;
+        stroke-linecap: round;
+    }
+
+    .minute_ticks {
+        fill: none;
+        stroke: black;
+        stroke-width: 7;
+        stroke-linecap: butt;
+        stroke-dasharray: 0.2 0.8;
+        stroke-dashoffset: 0.1;
+    }
+
+    .hour_ticks {
+        fill: none;
+        stroke: black;
+        stroke-width: 7;
+        stroke-linecap: butt;
+        stroke-dasharray: 0.2 4.8;
+        stroke-dashoffset: 0.1;
+    }
+
+    .display_window {
+        fill: #dedede;
+        stroke: black;
+        stroke-width: 0.5;
+    }
+
+    .seven_segment {
+        stroke: #dedede;
+        stroke-width: 0.25;
+        stroke-linecap: butt;
+    }
+
+    .hand {
+        stroke: black;
+        stroke-width: 2.5;
+        stroke-linecap: round;
+    }
+
+    .hand--second {
+        stroke-width: 1.5;
+    }
+
+    .spindle {
+        fill: white;
+        stroke: black;
+        stroke-width: 1;
+        stroke-linecap: round;
+    }
+</style>
+
+<script>
+    const segment_rom = [
+        [ true , true , true , true , true , true , false ],
+        [ false, true , true , false, false, false, false ],
+        [ true , true , false, true , true , false, true  ],
+        [ true , true , true , true , false, false, true  ],
+        [ false, true , true , false, false, true , true  ],
+        [ true , false, true , true , false, true , true  ],
+        [ true , false, true , true , true , true , true  ],
+        [ true , true , true , false, false, false, false ],
+        [ true , true , true , true , true , true , true  ],
+        [ true , true , true , true , false, true , true  ]
+    ];
+
+    function setDigit(e, num) {
+        var seg_values;
+
+        if (num == null) {
+            seg_values = [ false, false, false, false, false, false, false ];
+        }
+        else if (num < 0 || num > 9) {
+            return; // Out of range
+        }
+        else {
+            seg_values = segment_rom[num];
+        }
+
+        for (let i = 0; i < 7; i++) {
+            const segment = e.querySelector(`.seven_segment--${i}`);
+            segment.setAttribute("fill", seg_values[i] ? "#ff2020" : "#c0c0c0");
+        }
+    };
+
+    const d1 = document.querySelector(".clock_10h");
+    const d2 = document.querySelector(".clock_1h");
+    const d3 = document.querySelector(".clock_10m");
+    const d4 = document.querySelector(".clock_1m");
+
+    const secondHand = document.getElementById("second_hand");
+    const minuteHand = document.getElementById("minute_hand");
+    const hourHand = document.getElementById("hour_hand");
+
+    function update()
+    {
+        const date = new Date();
+
+        // Digital clock
+        const oddSecond = date.getSeconds() % 2 == 0;
+        const colonColor = oddSecond ? "#ff2020" : "#c0c0c0";
+        for (const e of document.getElementsByClassName("clock_colon")) {
+            e.setAttribute("fill", colonColor);
+        }
+        setDigit(d1, Math.floor(date.getHours() / 10));
+        setDigit(d2, Math.floor(date.getHours() % 10));
+        setDigit(d3, Math.floor(date.getMinutes() / 10));
+        setDigit(d4, Math.floor(date.getMinutes() % 10));
+
+        // Analog clock
+        const seconds = date.getSeconds();
+        const minutes = date.getMinutes() + seconds / 60;
+        const hours = date.getHours() + minutes / 60;
+        const secondsStr = `rotate(${seconds * 360 / 60})`;
+        const minutesStr = `rotate(${minutes * 360 / 60})`;
+        const hoursStr = `rotate(${hours *360 / 12})`;
+        secondHand.setAttribute("transform", secondsStr);
+        minuteHand.setAttribute("transform", minutesStr);
+        hourHand.setAttribute("transform", hoursStr);
+
+        requestAnimationFrame(update);
+    }
+
+    requestAnimationFrame(update);
+</script>
