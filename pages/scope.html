@@ -1,9 +1,7 @@
-<!-- Layout -->
 <svg viewBox="0 0 200 100">
     <g id="audio_scope" transform="translate(5, 5)" width="190" height="90" />
 </svg>
 
-<!-- Style -->
 <style>
     .scope_meter--box {
         fill: none;
@@ -27,7 +25,6 @@
     }
 </style>
 
-<!-- Behavior -->
 <script>
     class Oscilloscope
     {
@@ -37,6 +34,7 @@
             this.width = width;
             this.height = height;
             this.gain = 1;
+            this.triggerPoint = -1;
 
             // Container
             const box = document.createElementNS("http://www.w3.org/2000/svg", "rect");
@@ -53,13 +51,15 @@
             this.path.setAttribute("class", "scope_meter--trace");
             target.appendChild(this.path);
 
+            // Text container
             const textContainer = document.createElementNS("http://www.w3.org/2000/svg", "text");
             textContainer.setAttribute("class", "scope_meter--text");
             textContainer.setAttribute("y", "2");
             textContainer.setAttribute("font-size", "5");
             target.appendChild(textContainer);
 
-            const numLines = 3;
+            // Text lines
+            const numLines = 4;
             this.text = [];
             for (let i = 0; i < numLines; i++) {
                 const textLine = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
@@ -72,30 +72,89 @@
 
         update_shape(data)
         {
+            // Find peaks
             var min = Infinity;
             var max = -Infinity;
-            for (const value of data) {
+            for (var i = 0; i < data.length; i++) {
+                const value = data[i];
                 if (min > value) min = value;
                 if (max < value) max = value;
             }
 
+            // Find suitable trigger
+            const triggerLevel = 0.8;
+            const threshold = min + triggerLevel * (max - min);
+            var triggerPoint = -1;
+            for (var i = 0; i < data.length / 2; i++) {
+
+                // Try stepping left from center
+                {
+                    const index = data.length / 2 - i;
+                    const currentValue  = data[index];
+                    const previousValue = data[index - 1];
+                    const edgeDetect = (currentValue > previousValue);
+                    const triggered = Math.abs(currentValue - threshold) < 0.001;
+                    if (triggered && edgeDetect) {
+                        triggerPoint = index;
+                        break;
+                    }
+                }
+
+                // Try stepping right from center
+                {
+                    const index = data.length / 2 + i;
+                    const currentValue  = data[index];
+                    const previousValue = data[index - 1];
+                    const edgeDetect = (currentValue > previousValue);
+                    const triggered = Math.abs(currentValue - threshold) < 0.001;
+                    if (triggered && edgeDetect) {
+                        triggerPoint = index;
+                        break;
+                    }
+                }
+
+            }
+
+            // Get trigger positions
+            if (triggerPoint == -1) {
+                console.warn("Oscilloscope trigger failed");
+                triggerPoint = Math.floor(data.length * 0.5);
+                this.text[3].innerHTML = `Could not find suitable trigger, defaulting to center of input data`;
+            }
+            else {
+                this.text[3].innerHTML = `Found trigger at sample #${triggerPoint}, using #${this.triggerPoint}`;
+                if (this.triggerPoint != -1) {
+                    const alpha = 0.999;
+                    this.triggerPoint = alpha * this.triggerPoint + (1 - alpha) * triggerPoint;
+                }
+            }
+
+            const triggerWidth = Math.floor(data.length * 0.75);
+            const triggerStart = Math.round(this.triggerPoint - triggerWidth / 2);
+
+            // Update gain
             const strength = Math.max(max, -min);
             const maxGain = 10;
             const gain = Math.min(maxGain, 0.8 / strength);
             if (this.gain < gain) this.gain += 0.001;
             if (this.gain > gain) this.gain = gain;
 
+            // Text overlay
             const g1 = Math.round(this.gain * 100) / 100;
             this.text[0].innerHTML = `Current gain: ${g1}x`;
             const g2 = Math.round(gain * 100) / 100;
             this.text[1].innerHTML = `Maximum gain for current frame: ${g2}x`;
             this.text[2].innerHTML = `Shape data contains ${data.length} sample points`;
 
-            const delta_x = this.width / (data.length - 1);
+            // Update squiggle
             var d = "M";
-            for (const [index, value] of Object.entries(data)) {
-                const x = delta_x * index;
-                const y = (1 - value * this.gain) * (this.height - 4) / 2 + 2;
+            const margin = 2;
+            const scaleX = this.width / triggerWidth;
+            const scaleY = this.height / 2 - margin;
+            for (var i = 0; i < triggerWidth; i++) {
+                const sample = 1 - data[i + triggerStart] * this.gain;
+                const x = i * scaleX;
+                const y = sample * scaleY + margin;
                 d += `${x} ${y}, `;
             }
             this.path.setAttribute("d", d);
