@@ -30,12 +30,19 @@
     {
         constructor(selector, next)
         {
-            this.charsetCols = 64;
-            this.charsetRows = 4;
+            this.charsetCols = 32;
+            this.charsetRows = 8;
             this.characterWidth = 8;
             this.characterHeight = 16;
             this.cols = 80;
             this.rows = 25;
+
+            this.palette = [
+                "#000000", "#0000AA", "#00AA00", "#00AAAA",
+                "#AA0000", "#AA00AA", "#AA5500", "#AAAAAA",
+                "#555555", "#5555FF", "#55FF55", "#55FFFF",
+                "#FF5555", "#FF55FF", "#FFFF55", "#FFFFFF"
+            ];
 
             this.width = this.cols * this.characterWidth;
             this.height = this.rows * this.characterHeight;
@@ -44,6 +51,9 @@
             canvas.classList.add("__TextModeDisplay_canvas");
             canvas.width = this.width.toString(10);
             canvas.height = this.height.toString(10);
+
+            this.composer = new OffscreenCanvas(this.characterWidth, this.characterHeight);
+            this.composerCtx = this.composer.getContext("2d");
 
             const node = document.querySelector(selector);
             node.classList.add("__TextModeDisplay_crt");
@@ -55,46 +65,20 @@
             const charset = new Image();
             var ready = false;
             charset.onload = (function() { ready = true; next(this); }).bind(this);
-            charset.src = "/common/assets/font8x16_16color.png";
+            charset.src = "/common/assets/font8x16.png";
 
             this.canvas = canvas;
             this.ctx = ctx;
             this.charset = charset;
 
-            // this.vram = new Uint16Array(65536);
             this._fill(0, 0, this.cols, this.rows, 0x0);
         }
 
         // ---------- Raw graphics routines ----------
 
-        _putchar(x, y, which, color)
-        {
-            // Drop out-of-bounds calls
-            if (x < 0 || x >= self.cols || y < 0 || y >= self.rows) return;
-
-            const offY = color * this.charsetRows * this.characterHeight;
-            const srcX = (which % this.charsetCols) * this.characterWidth;
-            const srcY = Math.floor(which / this.charsetCols) * this.characterHeight + offY;
-            const dstX = x * this.characterWidth;
-            const dstY = y * this.characterHeight;
-
-            this.ctx.drawImage(
-                this.charset,
-                srcX, srcY, this.characterWidth, this.characterHeight,
-                dstX, dstY, this.characterWidth, this.characterHeight
-            );
-        }
-
         _fill(x, y, w, h, color)
         {
-            const palette = [
-                "#000000", "#0000AA", "#00AA00", "#00AAAA",
-                "#AA0000", "#AA00AA", "#AA5500", "#AAAAAA",
-                "#555555", "#5555FF", "#55FF55", "#55FFFF",
-                "#FF5555", "#FF55FF", "#FFFF55", "#FFFFFF"
-            ];
-
-            this.ctx.fillStyle = palette[color];
+            this.ctx.fillStyle = this.palette[color];
             this.ctx.fillRect(
                 x * this.characterWidth,
                 y * this.characterHeight,
@@ -103,32 +87,55 @@
             );
         }
 
-        // ---------- Video RAM manipulation ----------
+        _put(x, y, which, color)
+        {
+            // Drop out-of-bounds calls
+            if (x < 0 || x >= self.cols || y < 0 || y >= self.rows) return;
 
-        // vpeek(address)
-        // {
-        //     return this.vram[address % 65536];
-        // }
+            const srcX = (which % this.charsetCols) * this.characterWidth;
+            const srcY = Math.floor(which / this.charsetCols) * this.characterHeight;
+            const dstX = x * this.characterWidth;
+            const dstY = y * this.characterHeight;
 
-        // vpoke(address, data)
-        // {
-        //     const a = address & 0xFFFF;
-        //     const d = data & 0xFFFF;
-        //     const x = a % this.cols;
-        //     const y = Math.floor(a / this.cols) % this.rows;
+            // this.composerCtx.clearRect(0, 0, this.characterWidth, this.characterHeight);
 
-        //     this.vram[a] = d;
+            this.composerCtx.globalCompositeOperation = "copy";
+            this.composerCtx.drawImage(
+                this.charset,
+                srcX, srcY, this.characterWidth, this.characterHeight,
+                0, 0, this.characterWidth, this.characterHeight
+            );
 
-        //     this._fill(x, y, 1, 1, (d >> 12) & 0xF);
-        //     this._putchar(x, y, d & 0xFF, (d >> 8) & 0xF);
-        // }
+            this.composerCtx.globalCompositeOperation = "source-in";
+            this.composerCtx.fillStyle = this.palette[color];
+            this.composerCtx.fillRect(0, 0, this.characterWidth, this.characterHeight);
 
-        // ---------- Faster write methods for strings, etc. ----------
+            this.ctx.drawImage(
+                this.composer,
+                0, 0, this.characterWidth, this.characterHeight,
+                dstX, dstY, this.characterWidth, this.characterHeight
+            )
+        }
+
+        _clone(sx, sy, w, h, dx, dy)
+        {
+            this.ctx.drawImage(
+                this.canvas,
+                sx * this.characterWidth,
+                sy * this.characterHeight,
+                w * this.characterWidth,
+                h * this.characterHeight,
+                (sx + dx) * this.characterWidth,
+                (sy + dy) * this.characterHeight,
+                w * this.characterWidth,
+                h * this.characterHeight
+            );
+        }
 
         putchar(x, y, which, color)
         {
             this._fill(x, y, 1, 1, (color >> 4) & 0xF);
-            this._putchar(x, y, which, color & 0xF);
+            this._put(x, y, which, color & 0xF);
         }
 
         fill(x, y, w, h, which, color)
@@ -138,7 +145,7 @@
             if (c == 0) return; // Skip invisible chars
             for (var _x = 0; _x < w; _x++)
             for (var _y = 0; _y < h; _y++)
-            this._putchar(x + _x, y + _y, which, c);
+            this._put(x + _x, y + _y, which, c);
         }
 
         putstr(x, y, str, color)
@@ -147,7 +154,7 @@
             this._fill(x, y, len, 1, (color >> 4) & 0xF);
             for (var i = 0; i < len; i++) {
                 const chr = str.charCodeAt(i);
-                this._putchar(x + i, y, chr, color & 0xF);
+                this._put(x + i, y, chr, color & 0xF);
             }
         }
     }
