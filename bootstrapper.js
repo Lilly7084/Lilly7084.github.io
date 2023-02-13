@@ -4,12 +4,16 @@ const Bluestone =
 {
     requireIntegrityCheck: false,
 
+    container: null,
+
     fileHashes: {},
     pageTable: {},
     moduleCache: {},
 
     main: function()
     {
+        this.container = document.getElementById("container");
+
         // We can trust sha256sum.json to be fine (for now)
         fetch("/sha256sum.json")
         .then(response => response.json())
@@ -29,7 +33,8 @@ const Bluestone =
         })
 
         // Load default page
-        .then(() => this.loadPage(this.pageTable.defaultPage));
+        .then(() => this.loadPage(this.pageTable.defaultPage))
+        .then(() => __page_entry()) // Only necessary for pages with async entry (i.e. module loading)
     },
 
     fetch: async function(path)
@@ -56,15 +61,23 @@ const Bluestone =
     {
         if (!this.pageTable.pages.hasOwnProperty(name))
             throw new Error(`loadPage error: ${name}: Page not found`);
-        
-        const page = this.pageTable.pages[name];
-        const data = await this.fetch(page.file);
 
-        const container = document.getElementById("container");
-        this.autoFit(container);
+        const page = this.pageTable.pages[name];
+        await this.loadModule(page.file);
+
+        this.autoFit(this.container);
+    },
+
+    loadModule: async function(path)
+    {
+        console.debug("Loading module:", path);
+        const data = await this.fetch(path);
 
         const parsed = new DOMParser().parseFromString(data, "text/html");
-        const sections = parsed.body.childNodes;
+        // New fix: Some modules will load their sections into the documet HEAD, not BODY.
+        const headNodes = Array.prototype.slice.call(parsed.head.childNodes);
+        const bodyNodes = Array.prototype.slice.call(parsed.body.childNodes);
+        const sections = Array.prototype.concat.call(headNodes, bodyNodes);
 
         for (const section of sections) {
             if (section.nodeName == "#text") {
@@ -76,11 +89,11 @@ const Bluestone =
                 const e = document.createElement("script");
                 e.type = "text/javascript";
                 e.text = section.textContent;
-                container.appendChild(e);
+                this.container.appendChild(e);
             }
             
             else {
-                container.appendChild(section);
+                this.container.appendChild(section);
             }
         }
     },
@@ -89,7 +102,7 @@ const Bluestone =
     {
         const f = this.autoFitCallback.bind(e);
         window.addEventListener("resize", f);
-        setTimeout(f, 10);
+        setTimeout(f, 100);
     },
 
     autoFitCallback: async function()
@@ -116,4 +129,8 @@ const Bluestone =
     }
 };
 
-Bluestone.main();
+// setTimeout(Bluestone.main, 100);
+
+window.addEventListener("load", Bluestone.main.bind(Bluestone));
+
+// Bluestone.main();

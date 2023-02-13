@@ -1,0 +1,154 @@
+<style>
+    .__TextModeDisplay_crt::before {
+        content: " ";
+        display: block;
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        right: 0;
+        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+        z-index: 2;
+        background-size: 100% 2px, 3px 100%;
+        pointer-events: none;
+    }
+
+    .__TextModeDisplay_canvas {
+        width: 100%;
+        height: 100%;
+
+        image-rendering: optimizeSpeed;
+        image-rendering: -moz-crisp-edges;
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: optimize-contrast;
+        -ms-interpolation-mode: nearest-neighbor;
+    }
+</style>
+
+<script>
+    class TextModeDisplay
+    {
+        constructor(selector, next)
+        {
+            this.charsetCols = 64;
+            this.charsetRows = 4;
+            this.characterWidth = 8;
+            this.characterHeight = 16;
+            this.cols = 80;
+            this.rows = 25;
+
+            this.width = this.cols * this.characterWidth;
+            this.height = this.rows * this.characterHeight;
+
+            const canvas = document.createElement("canvas");
+            canvas.classList.add("__TextModeDisplay_canvas");
+            canvas.width = this.width.toString(10);
+            canvas.height = this.height.toString(10);
+
+            const node = document.querySelector(selector);
+            node.classList.add("__TextModeDisplay_crt");
+            node.appendChild(canvas);
+
+            const ctx = canvas.getContext("2d");
+            ctx.imageSmoothingEnabled = false;
+
+            const charset = new Image();
+            var ready = false;
+            charset.onload = (function() { ready = true; next(this); }).bind(this);
+            charset.src = "/common/assets/font8x16_16color.png";
+
+            this.canvas = canvas;
+            this.ctx = ctx;
+            this.charset = charset;
+
+            // this.vram = new Uint16Array(65536);
+            this._fill(0, 0, this.cols, this.rows, 0x0);
+        }
+
+        // ---------- Raw graphics routines ----------
+
+        _putchar(x, y, which, color)
+        {
+            // Drop out-of-bounds calls
+            if (x < 0 || x >= self.cols || y < 0 || y >= self.rows) return;
+
+            const offY = color * this.charsetRows * this.characterHeight;
+            const srcX = (which % this.charsetCols) * this.characterWidth;
+            const srcY = Math.floor(which / this.charsetCols) * this.characterHeight + offY;
+            const dstX = x * this.characterWidth;
+            const dstY = y * this.characterHeight;
+
+            this.ctx.drawImage(
+                this.charset,
+                srcX, srcY, this.characterWidth, this.characterHeight,
+                dstX, dstY, this.characterWidth, this.characterHeight
+            );
+        }
+
+        _fill(x, y, w, h, color)
+        {
+            const palette = [
+                "#000000", "#0000AA", "#00AA00", "#00AAAA",
+                "#AA0000", "#AA00AA", "#AA5500", "#AAAAAA",
+                "#555555", "#5555FF", "#55FF55", "#55FFFF",
+                "#FF5555", "#FF55FF", "#FFFF55", "#FFFFFF"
+            ];
+
+            this.ctx.fillStyle = palette[color];
+            this.ctx.fillRect(
+                x * this.characterWidth,
+                y * this.characterHeight,
+                w * this.characterWidth,
+                h * this.characterHeight
+            );
+        }
+
+        // ---------- Video RAM manipulation ----------
+
+        // vpeek(address)
+        // {
+        //     return this.vram[address % 65536];
+        // }
+
+        // vpoke(address, data)
+        // {
+        //     const a = address & 0xFFFF;
+        //     const d = data & 0xFFFF;
+        //     const x = a % this.cols;
+        //     const y = Math.floor(a / this.cols) % this.rows;
+
+        //     this.vram[a] = d;
+
+        //     this._fill(x, y, 1, 1, (d >> 12) & 0xF);
+        //     this._putchar(x, y, d & 0xFF, (d >> 8) & 0xF);
+        // }
+
+        // ---------- Faster write methods for strings, etc. ----------
+
+        putchar(x, y, which, color)
+        {
+            this._fill(x, y, 1, 1, (color >> 4) & 0xF);
+            this._putchar(x, y, which, color & 0xF);
+        }
+
+        fill(x, y, w, h, which, color)
+        {
+            this._fill(x, y, w, h, (color >> 4) & 0xF);
+            const c = color & 0xF;
+            if (c == 0) return; // Skip invisible chars
+            for (var _x = 0; _x < w; _x++)
+            for (var _y = 0; _y < h; _y++)
+            this._putchar(x + _x, y + _y, which, c);
+        }
+
+        putstr(x, y, str, color)
+        {
+            const len = Math.min(str.length, this.cols - x);
+            this._fill(x, y, len, 1, (color >> 4) & 0xF);
+            for (var i = 0; i < len; i++) {
+                const chr = str.charCodeAt(i);
+                this._putchar(x + i, y, chr, color & 0xF);
+            }
+        }
+    }
+</script>

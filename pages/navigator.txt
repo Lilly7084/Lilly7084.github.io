@@ -1,0 +1,21 @@
+<div id="crt"></div>
+
+<style>
+    #container {
+        overflow: hidden;
+    }
+</style>
+
+<script>
+    function main(crt)
+    {
+        crt.fill(0, 0, crt.cols, crt.rows, 0x00, 0x3F);
+        crt.putstr(0, 0, "Hello, world!", 0x3F);
+    }
+
+    async function __page_entry()
+    {
+        await Bluestone.loadModule("/common/modules/TextModeDisplay.txt");
+        new TextModeDisplay("#crt", main);
+    }
+</script>

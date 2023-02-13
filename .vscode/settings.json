@@ -1,5 +1,9 @@
 {
     "editor.rulers": [ 120 ],
     "liveServer.settings.root": "/",
-    "liveServer.settings.port": 7084
+    "liveServer.settings.port": 7084,
+    "files.associations": {
+        "**/common/modules/*.txt": "html",
+        "**/pages/*.txt": "html"
+    }
 }
