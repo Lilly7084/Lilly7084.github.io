@@ -4,18 +4,132 @@
     #container {
         overflow: hidden;
     }
+
+    #crt {
+        border: 4px solid #101010;
+        width: 100%;
+        height: 100%;
+    }
 </style>
 
 <script>
-    function main(crt)
+    var crt;
+    const colors = {
+        heading: 0x80,
+        headingSelected: 0xF0,
+        headingUnselected: 0x70,
+        bars: 0x0F,
+
+        main: 0x0F
+    };
+
+    function writeWrapped(x, y, w, h, text, color)
     {
-        crt.fill(0, 0, crt.cols, crt.rows, 0x00, 0x3F);
-        crt.putstr(0, 0, "Hello, world!", 0x3F);
+        var inbuf = text.slice() + " ";
+        var outbuf = "";
+        var space = w + 1;
+        var cursor = y;
+
+        while (cursor < (y + h) && inbuf.length > 0) {
+            if (inbuf.charCodeAt(0) == 0x0A) {
+                inbuf = inbuf.slice(1);
+                cursor ++;
+                continue;
+            }
+            var space = w + 1;
+            var outbuf = "";
+            while (space > 0) {
+                const slicer = inbuf.indexOf(" ");
+                const word = inbuf.slice(0, slicer);
+                if (word.length >= space) break;
+                inbuf = inbuf.slice(slicer + 1);
+                outbuf += " " + word;
+                space -= word.length + 1;
+                // console.log(inbuf, "\n", outbuf);
+            }
+            crt.putstr(x, cursor, outbuf.slice(1), colors.main);
+            cursor ++;
+        }
     }
+
+
+
+    function welcomeTab_draw()
+    {
+        crt.putstr(3, 2, "Welcome to Lilly7084's website!", colors.main);
+
+        const x = crt.cols - 17;
+        for (var i = 0; i < 8; i++)
+            crt.fill(x + i * 2, 2, 2, 2, 0xDB, i);
+        for (var i = 0; i < 8; i++)
+            crt.fill(x + i * 2, 4, 2, 2, 0xDB, i + 8);
+
+        crt.putstr(1, 5, "Use the left/right arrows to switch between tabs.", colors.main);
+        writeWrapped(1, 7, crt.cols - 2, 8, "In the 'Pages' tab, use the up/down arrows to switch between pages, and ENTER to open the selected page.", colors.main);
+    }
+
+
+
+    function pagesTab_draw()
+    {
+
+    }
+
+
+
+    const tabs = [
+        { draw: welcomeTab_draw, title: "Welcome" },
+        { title: "Pages" }
+    ];
+
+    var tabSelect = 0;
+
+    function draw()
+    {
+        var px = 0;
+        crt.fill(0, 0, crt.cols, 1, 0x00, colors.heading);
+        for (const i in tabs) {
+            const name = " " + tabs[i].title + " ";
+            const c = (i == tabSelect) ? colors.headingSelected : colors.headingUnselected;
+            crt.putstr(px, 0, name, c);
+            px += name.length;
+        }
+
+        crt.fill(0, 1, crt.cols, 1, 0xDF, colors.bars);
+        // crt.fill(0, crt.rows - 1, crt.cols, 1, 0xDC, colors.bars);
+
+        crt.fill(0, 2, crt.cols, crt.rows - 3, 0x00, colors.main);
+        if (tabs[tabSelect].hasOwnProperty("draw")) {
+            tabs[tabSelect].draw();
+        }
+    }
+
+    function update(event)
+    {
+        if (event.key === "ArrowRight" && tabSelect < (tabs.length - 1)) {
+            tabSelect ++;
+        }
+
+        else if (event.key === "ArrowLeft" && tabSelect > 0) {
+            tabSelect --;
+        }
+
+        else if (tabs[tabSelect].hasOwnProperty("event")) {
+            tabs[tabSelect].event(event); // Pass on to page handler
+        }
+    }
+
+
 
     async function __page_entry()
     {
         await Bluestone.loadModule("/common/modules/TextModeDisplay.txt");
-        new TextModeDisplay("#crt", main);
+        crt = new TextModeDisplay("#crt", () => {
+            window.addEventListener("keydown", (event) => {
+                if (!event.repeat) update(event);
+                draw();
+            });
+            draw();
+        });
     }
 </script>
