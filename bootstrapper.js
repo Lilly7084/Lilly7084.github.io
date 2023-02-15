@@ -33,8 +33,17 @@ const Bluestone =
         })
 
         // Load default page
-        .then(() => this.loadPage(this.pageTable.defaultPage))
+        .then(() => this.loadPage(this.getPageID()))
         .then(() => __page_entry()) // Only necessary for pages with async entry (i.e. module loading)
+    },
+
+    getPageID: function()
+    {
+        const fragment = window.location.hash;
+        if (fragment.length > 0) {
+            return fragment.slice(1).toLowerCase();
+        }
+        return this.pageTable.defaultPage;
     },
 
     fetch: async function(path)
