@@ -2,24 +2,30 @@
     "defaultPage": "navigator",
     "pages": {
         "clock": {
+            "title": "Analog/digital clock",
             "description": "Analog clock made with SVG, CSS, and JavaScript. Written as a simple demonstration of the page format.",
-            "status": "Complete",
+            "visible": true,
+            "status": "Completed",
             "created": "2023-01-11",
             "modified": "2023-01-20",
             "file": "/pages/clock.txt"
         },
         "scope": {
+            "title": "Audio oscilloscope",
             "description": "Audio oscilloscope to help me get used to the component-based layout system.",
-            "status": "WIP",
+            "visible": true,
+            "status": "Working",
             "created": "2023-01-22",
             "modified": "2023-02-11",
             "file": "/pages/scope.txt"
         },
         "navigator": {
+            "title": "Navigator",
             "description": "Navigator system using a canvas and a simulated text-mode display",
-            "status": "WIP",
+            "visible": false,
+            "status": "Working",
             "created": "2023-02-12",
-            "modified": "2023-02-15",
+            "modified": "2023-02-16",
             "file": "/pages/navigator.txt"
         }
     }

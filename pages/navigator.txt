@@ -45,9 +45,8 @@
                 inbuf = inbuf.slice(slicer + 1);
                 outbuf += " " + word;
                 space -= word.length + 1;
-                // console.log(inbuf, "\n", outbuf);
             }
-            crt.putstr(x, cursor, outbuf.slice(1), colors.main);
+            crt.putstr(x, cursor, outbuf.slice(1), color);
             cursor ++;
         }
     }
@@ -56,7 +55,7 @@
 
     function welcomeTab_draw()
     {
-        crt.putstr(3, 2, "Welcome to Lilly7084's website!", colors.main);
+        crt.putstr(3, 2, "Welcome to my website!", colors.main);
 
         const x = crt.cols - 17;
         for (var i = 0; i < 8; i++)
@@ -65,26 +64,128 @@
             crt.fill(x + i * 2, 4, 2, 2, 0xDB, i + 8);
 
         crt.putstr(1, 5, "Use the left/right arrows to switch between tabs.", colors.main);
-        writeWrapped(1, 7, crt.cols - 2, 8, "In the 'Pages' tab, use the up/down arrows to switch between pages, and ENTER to open the selected page.", colors.main);
+        writeWrapped(1, 7, crt.cols - 2, 8, "In the 'Pages' tab, use the up/down arrows to scroll through the page list, and ENTER to open the selected page.", colors.main);
     }
 
 
 
+    var pagesTab_list = [];
+    var pagesTab_visible;
+    var pagesTab_select = 0;
+    var pagesTab_scroll = 0;
+
+    function pageTab_drawTabList()
+    {
+        const half = Math.floor(crt.cols / 2); // TODO: Move rounding to CRT class
+        crt.fill(0, 2, half - 1, pagesTab_visible, 0x00, colors.main);
+        var index = 0;
+        for (const page of pagesTab_list) {
+            const row = index - pagesTab_scroll + 2;
+            if (row >= 2 && row < crt.rows - 1)
+            crt.putstr(2, row, page.title, colors.main);
+            index ++;
+        }
+    }
+
+    function pageTab_drawScrollBar()
+    {
+        const half = Math.floor(crt.cols / 2); // TODO: Move rounding to CRT class
+
+        // Raw scrollbar parameters, range 0...1
+        const progress = Math.min(pagesTab_scroll / (pagesTab_list.length - pagesTab_visible), 1);
+        const thickness = Math.min(pagesTab_visible / pagesTab_list.length, 1);
+
+        const length = Math.floor(thickness * pagesTab_visible);
+        var offset = Math.floor(progress * (pagesTab_visible - length - 1));
+        if (progress > 0) offset ++;
+
+        crt.fill(half - 1, 2, 1, pagesTab_visible, 0xB3, colors.main);
+        crt.fill(half - 1, offset + 2, 1, length, 0xB1, colors.main);
+    }
+
+    function pageTab_drawSidePane()
+    {
+        const half = Math.floor(crt.cols / 2); // TODO: Move rounding to CRT class
+        const page = pagesTab_list[pagesTab_select];
+        crt.fill(half + 1, 2, half - 2, pagesTab_visible, 0x00, colors.main);
+
+        crt.putstr(half + 1, 2, "Status: " + page.status, colors.main);
+        crt.putstr(half + 1, 3, "Created: " + page.created, colors.main);
+        crt.putstr(half + 1, 4, "Modified: " + page.modified, colors.main);
+
+        writeWrapped(half + 1, 6, half - 2, pagesTab_visible, "    " + page.description, colors.main);
+    }
+
+    function pagesTab_event(event)
+    {
+        if (event.key === "Enter") {
+            const url = "/#" + pagesTab_list[pagesTab_select].id;
+            window.open(url, '_blank').focus();
+            return;
+        }
+
+        crt.putchar(0, pagesTab_select - pagesTab_scroll + 2, 0x00, colors.main);
+
+        if (event.key === "ArrowUp" && pagesTab_select > 0) {
+            pagesTab_select --;
+        }
+
+        if (event.key === "ArrowDown" && pagesTab_select < (pagesTab_list.length - 1)) {
+            pagesTab_select ++;
+        }
+
+        // Scroll page-list to fit cursor
+        var changed = false;
+        const pointer = pagesTab_select - pagesTab_scroll;
+        if (pointer < 0) {
+            pagesTab_scroll --;
+            changed = true;
+        }
+        if (pointer >= pagesTab_visible) {
+            pagesTab_scroll ++;
+            changed = true;
+        }
+
+        crt.putchar(0, pagesTab_select - pagesTab_scroll + 2, 0x10, colors.main);
+
+        if (changed) {
+            pageTab_drawTabList();
+            pageTab_drawScrollBar();
+        }
+
+        pageTab_drawSidePane();
+    }
+
     function pagesTab_draw()
     {
+        pagesTab_visible = crt.rows - 3;
 
+        // Local filtered list of pages
+        // for (var i = 0; i < 15; i++)
+        if (pagesTab_list.length == 0)
+        for (const [id, page] of Object.entries(Bluestone.pageTable.pages))
+        if (page.visible) {
+            page.id = id;
+            pagesTab_list.push(page);
+        }
+
+        pageTab_drawTabList();
+        pageTab_drawScrollBar();
+        pageTab_drawSidePane();
+
+        crt.putchar(0, pagesTab_select - pagesTab_scroll + 2, 0x10, colors.main);
     }
 
 
 
     const tabs = [
         { draw: welcomeTab_draw, title: "Welcome" },
-        { title: "Pages" }
+        { draw: pagesTab_draw, event: pagesTab_event, title: "Pages" }
     ];
 
     var tabSelect = 0;
 
-    function draw()
+    function drawTabs()
     {
         var px = 0;
         crt.fill(0, 0, crt.cols, 1, 0x00, colors.heading);
@@ -94,29 +195,50 @@
             crt.putstr(px, 0, name, c);
             px += name.length;
         }
-
-        crt.fill(0, 1, crt.cols, 1, 0xDF, colors.bars);
-        // crt.fill(0, crt.rows - 1, crt.cols, 1, 0xDC, colors.bars);
-
-        crt.fill(0, 2, crt.cols, crt.rows - 3, 0x00, colors.main);
-        if (tabs[tabSelect].hasOwnProperty("draw")) {
-            tabs[tabSelect].draw();
-        }
     }
 
     function update(event)
     {
+        if (event.repeat) return;
+        var moved = false;
+
         if (event.key === "ArrowRight" && tabSelect < (tabs.length - 1)) {
             tabSelect ++;
+            moved = true;
         }
 
         else if (event.key === "ArrowLeft" && tabSelect > 0) {
             tabSelect --;
+            moved = true;
         }
 
         else if (tabs[tabSelect].hasOwnProperty("event")) {
             tabs[tabSelect].event(event); // Pass on to page handler
         }
+
+        if (moved) {
+            crt.fill(0, 2, crt.cols, crt.rows - 3, 0x00, colors.main);
+            if (tabs[tabSelect].hasOwnProperty("draw")) {
+                tabs[tabSelect].draw();
+            }
+        }
+
+        drawTabs();
+    }
+
+    function init()
+    {
+        drawTabs();
+
+        crt.fill(0, 1, crt.cols, 1, 0xDF, colors.bars);
+        crt.fill(0, crt.rows - 1, crt.cols, 1, 0xDC, colors.bars);
+
+        crt.fill(0, 2, crt.cols, pagesTab_visible, 0x00, colors.main);
+        if (tabs[tabSelect].hasOwnProperty("draw")) {
+            tabs[tabSelect].draw();
+        }
+
+        window.addEventListener("keydown", update);
     }
 
 
@@ -124,12 +246,6 @@
     async function __page_entry()
     {
         await Bluestone.loadModule("/common/modules/TextModeDisplay.txt");
-        crt = new TextModeDisplay("#crt", () => {
-            window.addEventListener("keydown", (event) => {
-                if (!event.repeat) update(event);
-                draw();
-            });
-            draw();
-        });
+        crt = new TextModeDisplay("#crt", init);
     }
 </script>
