@@ -1,6 +1,11 @@
 <div id="crt"></div>
 
 <style>
+    body {
+        background: #040404;
+        background-image: none !important;
+    }
+
     #container {
         overflow: hidden;
     }

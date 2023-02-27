@@ -1,19 +1,60 @@
-<style>
-    .__TextModeDisplay_crt::before {
-        content: " ";
-        display: block;
-        position: absolute;
-        top: 0;
-        left: 0;
-        bottom: 0;
-        right: 0;
-        background: linear-gradient(   #10101000, #00000040             ),
-                linear-gradient(90deg, #FF00000F, #00FF0005, #0000FF0F);
-        z-index: 2;
-        background-size: 100% 2px, 3px 100%;
-        pointer-events: none;
-    }
+<svg style="visibility: hidden">
+    <defs>
+        <filter id="PhosphorFilter">
 
+            <feImage
+                xlink:href="/common/assets/trinitron_phosphor.png"
+                width="36"
+                height="32" />
+            
+            <feTile
+                result="PHOSPHOR" />
+            
+            <feComposite
+                in="SourceGraphic"
+                in2="PHOSPHOR"
+                result="BLENDED"
+                operator="arithmetic"
+                k1="0.65"
+                k2="0.3"
+                k3="0.05"
+                k4="-0.02" />
+            
+            <feGaussianBlur
+                in="SourceGraphic"
+                result="BLURRED"
+                stdDeviation="10" />
+            
+            <feComposite
+                in="BLENDED"
+                in2="BLURRED"
+                operator="arithmetic"
+                k1="0.08"
+                k2="0.9"
+                k3="0.1"
+                k4="0.0" />
+            
+            <feComposite
+                in2="PHOSPHOR"
+                operator="arithmetic"
+                k1="0.0"
+                k2="1.0"
+                k3="0.02"
+                k4="0.0" />
+            
+            <feComposite
+                in2="SourceGraphic"
+                operator="arithmetic"
+                k1="0.0"
+                k2="1.0"
+                k3="0.14"
+                k4="0.0" />
+
+        </filter>
+    </defs>
+</svg>
+
+<style>
     .__TextModeDisplay_canvas {
         width: 100%;
         height: 100%;
@@ -23,6 +64,8 @@
         image-rendering: -webkit-optimize-contrast;
         image-rendering: optimize-contrast;
         -ms-interpolation-mode: nearest-neighbor;
+
+        filter: url(#PhosphorFilter);
     }
 </style>
 
@@ -31,13 +74,19 @@
     {
         constructor(selector, next)
         {
-            this.charsetCols = 32;
-            this.charsetRows = 8;
-            this.charWidth = 8;
-            this.charHeight = 16;
-            this.cols = 80;
-            this.rows = 25;
+            this.charsetCols = 32; // # of characters horizontally
+            this.charsetRows =  8; // # of characters vertically
+            this.charWidth   =  8; // # of pixels horizontally
+            this.charHeight  = 16; // # of pixels vertically
+            this.cols        = 80; // # of visible chars horizontally
+            this.rows        = 25; // # of visible chars vertically
 
+            // Canvas size in pixels
+            this.width = this.cols * this.charWidth;
+            this.height = this.rows * this.charHeight;
+
+            // Palette is currently hard-coded,
+            // but in one place so it's still easy to update
             this.palette = [
                 "#202020", "#2020AA", "#20AA20", "#20AAAA",
                 "#AA2020", "#AA20AA", "#AA5520", "#AAAAAA",
@@ -45,32 +94,30 @@
                 "#FF5555", "#FF55FF", "#FFFF55", "#FFFFFF"
             ];
 
-            this.width = this.cols * this.charWidth;
-            this.height = this.rows * this.charHeight;
-
-            const canvas = document.createElement("canvas");
-            canvas.classList.add("__TextModeDisplay_canvas");
-            canvas.width = this.width.toString(10);
-            canvas.height = this.height.toString(10);
-
-            this.composer = new OffscreenCanvas(this.charWidth, this.charHeight);
-            this.composerCtx = this.composer.getContext("2d");
-
-            const node = document.querySelector(selector);
-            node.classList.add("__TextModeDisplay_crt");
-            node.appendChild(canvas);
-
-            const ctx = canvas.getContext("2d");
-            ctx.imageSmoothingEnabled = false;
-
+            // Character set
             const charset = new Image();
             charset.onload = next.bind(this);
             charset.src = "/common/assets/font8x16.png";
-
-            this.canvas = canvas;
-            this.ctx = ctx;
             this.charset = charset;
 
+            // Canvas element
+            this.canvas = document.createElement("canvas");
+            this.canvas.classList.add("__TextModeDisplay_canvas");
+            this.canvas.width = this.width.toString(10);
+            this.canvas.height = this.height.toString(10);
+            this.ctx = canvas.getContext("2d");
+            this.ctx.imageSmoothingEnabled = false;
+
+            // Offscreen canvas to set foreground color
+            this.composer = new OffscreenCanvas(this.charWidth, this.charHeight);
+            this.composerCtx = this.composer.getContext("2d");
+
+            // Put canvas into document
+            const target = document.querySelector(selector);
+            target.classList.add("__TextModeDisplay_crt");
+            target.appendChild(canvas);
+
+            // Start with screen blank
             this._fill(0, 0, this.cols, this.rows, 0x0);
         }
 
@@ -89,14 +136,16 @@
 
         _put(x, y, which, color)
         {
-            // Drop out-of-bounds calls
+            // Discard out-of-bounds calls
             if (x < 0 || x >= self.cols || y < 0 || y >= self.rows) return;
 
+            // Pre-compute offsets in source and destination images
             const sx = (which % this.charsetCols) * this.charWidth;
             const sy = Math.floor(which / this.charsetCols) * this.charHeight;
             const dx = x * this.charWidth;
             const dy = y * this.charHeight;
 
+            // Fill composer with foreground color
             this.composerCtx.globalCompositeOperation = "copy";
             this.composerCtx.drawImage(
                 this.charset,
@@ -104,17 +153,20 @@
                 0, 0, this.charWidth, this.charHeight
             );
 
+            // Alpha-mask that foreground color with the chosen character
             this.composerCtx.globalCompositeOperation = "source-in";
             this.composerCtx.fillStyle = this.palette[color];
             this.composerCtx.fillRect(0, 0, this.charWidth, this.charHeight);
 
+            // Copy the colored character onto the visible canvas
             this.ctx.drawImage(
                 this.composer,
                 0, 0, this.charWidth, this.charHeight,
                 dx, dy, this.charWidth, this.charHeight
-            )
+            );
         }
 
+        // TODO: make a protected publicly-visible version of this method
         _clone(sx, sy, w, h, dx, dy)
         {
             this.ctx.drawImage(
