@@ -1,6 +1,16 @@
 {
-    "/pages.json": "c157d8dbc486eb1fcdd25ba29967e477b5d5d5ed4d06d8c70bd5623af3c14b59",
+    "/bootstrapper.js": "cc14f3986b60bb11bdb4a1b1697cc48cdda8027913d6f60a2838a4e76e336a5b",
+    "/index.html": "c69a2ad92942ded59c85a33d8c976c750c76c7fe574453d0c8cd22d51d6f598a",
+    "/pages.json": "28afd2c7f9d73e72d94aee35f35b7eb49a8ac14c5ab54d908e3b60f63d34bcc4",
+    "/sha256sum.json": "624ebab10cf6c077c8b262ced51156f8d9f05c7e9ca7fb4ee206600194f92f8f",
     "/style.css": "c1c20edc597ff95126d0148d4c2ee5c898e64d9a25f55532510a342f585e28b2",
-    "/pages/clock.txt": "a5836b5933ea9f8beed23de6759b80f06affd620afd6cb43eba9907e3416952a",
-    "/common/components/7Segment.js": "9338b4df9b333229e96a2afcbff389228593bd7da31f899b8610e537e3c90963"
+
+    "/pages/clock.txt": "5943931d4e9986dc8e439b58f03dd6aa073f7c3c563c9b81116c0e0dfe15adcf",
+    "/pages/navigator.txt": "ceece1c487dec56c419fc22c28f10d5ab412e88f494086ed5b295c87276dacbe",
+    "/pages/scope.txt": "b08be61a212f0575c7ce9ad69f83ab3f6033787426cb192493759a63562a2d76",
+
+    "/common/assets/font8x16.png": "20d6626938ad9178d4bcc95726ce3fdfc2efc8ca3ee1440196a4833c1fa1ddd2",
+    "/common/assets/trinitron_phosphor.png": "7796b2a51f3dc48f9f6a0ddb7bb033a0ae5eb8bdb45b52c46ec2f50e46bfcea5",
+
+    "/common/modules/TextModeDisplay.txt": "965f8a25caab7d68c3fc4324550b33f2e83b835318157f52965974db66762782"
 }
