@@ -105,7 +105,7 @@
             this.canvas.classList.add("__TextModeDisplay_canvas");
             this.canvas.width = this.width.toString(10);
             this.canvas.height = this.height.toString(10);
-            this.ctx = canvas.getContext("2d");
+            this.ctx = this.canvas.getContext("2d");
             this.ctx.imageSmoothingEnabled = false;
 
             // Offscreen canvas to set foreground color
@@ -115,7 +115,7 @@
             // Put canvas into document
             const target = document.querySelector(selector);
             target.classList.add("__TextModeDisplay_crt");
-            target.appendChild(canvas);
+            target.appendChild(this.canvas);
 
             // Start with screen blank
             this._fill(0, 0, this.cols, this.rows, 0x0);
