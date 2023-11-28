@@ -1,3 +1,9 @@
+Math.clamp = function (num, min, max) {
+    if (num < min) return min;
+    else if (num > max) return max;
+    else return num;
+}
+
 const Audio =
 {
     started: false,
@@ -14,12 +20,12 @@ const Audio =
         this.started = true;
     },
 
-    mute: async function ()
+    mute: function ()
     {
         this.worklet.disconnect();
     },
 
-    unmute: async function ()
+    unmute: function ()
     {
         this.worklet.connect(this.ctx.destination);
     }
@@ -81,11 +87,19 @@ class Button
     }
 }
 
-const MainUI =
+const UI =
 {
+    originX: 340,
+    originY: 449,
+    radius: 298,
+    scale: 60,
+    angleOffset: -0.24,
+    angleScale: 0.64,
+
+    lipStart: 0, // ! Incorrect !
+
     inTitleCard: true,
     inInstructionCard: false,
-
     touches: [],
     width: 600,
     top: 0,
@@ -93,7 +107,7 @@ const MainUI =
     time: 0,
 
     // ! Incomplete !
-    init: async function ()
+    init: function ()
     {
         // Canvases
         this.tractCanvas = document.querySelector("#tractCanvas");
@@ -114,48 +128,51 @@ const MainUI =
         // Touch events
         this.tractCanvas.addEventListener("touchstart", function (event) {
             event.preventDefault();
-            MainUI.startTouches(event.changedTouches);
+            UI.startTouches(event.changedTouches);
         });
         this.tractCanvas.addEventListener("touchmove", function (event) {
-            MainUI.moveTouches(event.changedTouches);
+            UI.moveTouches(event.changedTouches);
         });
         this.tractCanvas.addEventListener("touchend", function (event) {
-            MainUI.endTouches(event.changedTouches);
+            UI.endTouches(event.changedTouches);
         });
         this.tractCanvas.addEventListener("touchcancel", function (event) {
-            MainUI.endTouches(event.changedTouches);
+            UI.endTouches(event.changedTouches);
         });
 
         // Mouse events
         document.addEventListener("mousedown", function (event) {
             event.preventDefault();
-            MainUI.startTouches([ {
+            UI.startTouches([ {
                 pageX: event.pageX,
                 pageY: event.pageY,
                 identifier: "mouse"
             } ]);
         });
         document.addEventListener("mousemove", function (event) {
-            MainUI.moveTouches([ {
+            UI.moveTouches([ {
                 pageX: event.pageX,
                 pageY: event.pageY,
                 identifier: "mouse"
             } ]);
         });
         document.addEventListener("mouseup", function (event) {
-            MainUI.endTouches([ {
+            UI.endTouches([ {
                 pageX: event.pageX,
                 pageY: event.pageY,
                 identifier: "mouse"
             } ]);
         });
 
-        requestAnimationFrame(this.update.bind(this));
+        // ...
+
+        requestAnimationFrame(this.draw.bind(this));
     },
 
     // ! Incomplete !
-    update: async function ()
+    draw: function ()
     {
+        this.time = Date.now() / 1000;
         this.resize();
         this.tractCtx.clearRect(0, 0, this.tractCanvas.width, this.tractCanvas.height);
 
@@ -163,17 +180,45 @@ const MainUI =
         this.alwaysVoiceButton.draw(this.tractCtx);
         this.pitchWobbleButton.draw(this.tractCtx);
 
+        // ...
+
         if (this.inTitleCard)
             this.drawTitleCard();
         else if (this.inInstructionCard)
             this.drawInstructionCard();
 
-        this.time = Date.now() / 1000;
-        requestAnimationFrame(this.update.bind(this));
+        this.updateTouches();
+        requestAnimationFrame(this.draw.bind(this));
     },
 
-    // ! Incomplete !
-    startTouches: async function (touches)
+    getTouchById: function (id)
+    {
+        for (const touch of this.touches)
+            if (touch.id == id && touch.alive)
+                return touch;
+        return null;
+    },
+
+    getTouchPosition: function (touch)
+    {
+        const x = (touch.pageX - this.left) * 600 / this.width;
+        const y = (touch.pageY - this.top) * 600 / this.width;
+        return [x, y];
+    },
+
+    getTractPosition: function (x,y)
+    {
+        const xx = x - this.originX;
+        const yy = y - this.originY;
+        const angle = Math.atan2(yy, xx) + Math.PI - this.angleOffset;
+        const length = Math.sqrt(xx*xx + yy*yy);
+
+        const index = angle * (this.lipStart - 1) / (this.angleScale * Math.PI);
+        const diameter = (this.radius - length) / this.scale;
+        return [index, diameter];
+    },
+
+    startTouches: function (touches)
     {
         Audio.init();
         if (this.inTitleCard) {
@@ -187,35 +232,49 @@ const MainUI =
             return;
         }
         for (const _touch of touches) {
-            const touch = {
-                startTime: this.time,
-                endTime: 0,
-                alive: true,
-                id: _touch.identifier,
-                x: (_touch.pageX - this.left) * 600 / this.width,
-                y: (_touch.pageY - this.top) * 600 / this.width
-            };
+            const touch = {};
+            touch.startTime = this.time;
+            touch.endTime = 0;
+            touch.alive = true;
+            touch.id = _touch.identifier;
+            [touch.x, touch.y] = this.getTouchPosition(_touch);
+            [touch.index, touch.diameter] = this.getTractPosition(touch.x, touch.y);
+            touch.fricativeIntensity = 0;
             this.touches.push(touch);
             this.aboutButton.handleTouchStart(touch);
             this.alwaysVoiceButton.handleTouchStart(touch);
             this.pitchWobbleButton.handleTouchStart(touch);
         }
+        this.handleTouches();
     },
 
-    // ! Incomplete !
-    moveTouches: async function (touches)
-    {},
-
-    // ! Incomplete !
-    endTouches: async function (touches)
+    moveTouches: function (touches)
     {
-        if (!this.aboutButton.state) 
-        {
-            this.inInstructionCard = true;
+        for (const _touch of touches) {
+            const touch = this.getTouchById(_touch.identifier);
+            if (touch != null) {
+                [touch.x, touch.y] = this.getTouchPosition(_touch);
+                [touch.index, touch.diameter] = this.getTractPosition(touch.x, touch.y);
+            }
         }
+        this.handleTouches();
     },
 
-    resize: async function ()
+    endTouches: function (touches)
+    {
+        for (const _touch of touches) {
+            const touch = this.getTouchById(_touch.identifier);
+            if (touch != null) {
+                touch.alive = false;
+                touch.endTime = this.time;
+            }
+        }
+        if (!this.aboutButton.state) 
+            this.inInstructionCard = true;
+        this.handleTouches();
+    },
+
+    resize: function ()
     {
         const spacing = 5;
         if (window.innerWidth <= window.innerHeight) {
@@ -234,7 +293,7 @@ const MainUI =
         this.backCanvas.style.width = this.width + "px";
     },
 
-    drawTitleCard: async function ()
+    drawTitleCard: function ()
     {
         const ctx = this.tractCtx;
 
@@ -259,7 +318,7 @@ const MainUI =
         ctx.fillText("(tap to start)", 300, 380);   
     },
 
-    drawInstructionCard: async function ()
+    drawInstructionCard: function ()
     {
         Audio.mute();
         const ctx = this.tractCtx;
@@ -293,7 +352,26 @@ const MainUI =
         }
 
         ctx.globalAlpha = 1.0;
-    }
+    },
+
+    updateTouches: function ()
+    {
+        const fricativeAttackTime = 0.1;
+        for (const [i, touch] of this.touches.entries()) {
+            // Delete touches which have been expired long enough to be useless
+            if (!touch.alive && (this.time > touch.endTime + 1))
+                this.touches.splice(i, 1);
+            else {
+                const ramp = (this.time - touch.startTime) / fricativeAttackTime;
+                const clamp = Math.clamp(ramp, 0, 1);
+                touch.fricativeIntensity = touch.alive ? clamp : (1 - clamp);
+            }
+        }
+    },
+
+    // ! Incomplete !
+    handleTouches: function ()
+    {}
 };
 
-MainUI.init();
+UI.init();
