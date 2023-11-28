@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>IEEE 754 converter</title>
+
+        <style>
+            * {
+                box-sizing: border-box;
+                -moz-box-sizing: border-box;
+                -webkit-box-sizing: border-box;
+            }
+
+            body {
+                margin: 0;
+                padding: 0;
+                width: 100vw;
+                height: 100vh;
+                background-color: #a0a0a0;
+            }
+
+            #container {
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                transform: translate(-50%, -50%);
+                border: 2px solid #000000;
+                padding: 4px;
+                background-color: #f0f0f0;
+            }
+        </style>
+
+        <script>
+            const RE_HEX = new RegExp("[^0-9a-f]");
+            const RE_DEC = new RegExp("[^0-9]");
+
+            var buffer = new ArrayBuffer(8);
+            var view = new DataView(buffer);
+
+            function show_result() {
+                document.querySelector("#val_hex").value = "0x" + view.getBigUint64(0, true).toString(16).padStart(16, "0");
+                document.querySelector("#val_dec").value = view.getFloat64(0, true).toString();
+            }
+
+            function changed_hex() {
+                var as_str = document.querySelector("#val_hex").value.toLowerCase();
+                if (as_str.startsWith("0x"))
+                    as_str = as_str.slice(2);
+                const as_number = BigInt(parseInt(as_str, 16));
+                console.debug("Hexadecimal value changed!", as_str, as_number);
+                view.setBigUint64(0, as_number, true);
+                show_result();
+            }
+
+            function changed_dec() {
+                const as_str = document.querySelector("#val_dec").value.toLowerCase();
+                const as_number = parseFloat(as_str);
+                console.debug("Decimal value changed!");
+                view.setFloat64(0, as_number, true);
+                show_result();
+            }
+
+            window.addEventListener("load", show_result);
+        </script>
+    </head>
+    <body>
+
+        <table id="container">
+            <tr>
+                <td colspan="2">
+                    Lilly7084's IEEE-754 floating-point converter
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    Decimal value
+                </td>
+                <td>
+                    <input id="val_dec" type="text" onchange="changed_dec()" />
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    Hex value (float64)
+                </td>
+                <td>
+                    <input id="val_hex" type="text" onchange="changed_hex()" />
+                </td>
+            </tr>
+        </table>
+
+    </body>
+</html>
