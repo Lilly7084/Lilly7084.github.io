@@ -1,14 +1,17 @@
-Math.clamp = function (num, min, max) {
+Math.clamp = function (num, min, max)
+{
     if (num < min) return min;
     else if (num > max) return max;
     else return num;
 }
 
+const canvas = document.querySelector("#tractCanvas");
+const ctx = canvas.getContext("2d");
+
 const Audio =
 {
     started: false,
 
-    // ! Incomplete !
     init: async function ()
     {
         if (this.started) return;
@@ -16,6 +19,34 @@ const Audio =
         this.ctx = new window.AudioContext();
         await this.ctx.audioWorklet.addModule("audio_worklet.js");
         this.worklet = new AudioWorkletNode(this.ctx, "trambone-processor");
+
+        // White noise generator
+        const frameCount = 2 * this.ctx.sampleRate; // 2 second loop
+        const buffer = this.ctx.createBuffer(1, frameCount, this.ctx.sampleRate);
+        const channel = buffer.getChannelData(0);
+        for (var i = 0; i < frameCount; i++)
+            channel[i] = Math.random();
+        const whiteNoise = this.ctx.createBufferSource();
+        whiteNoise.buffer = buffer;
+        whiteNoise.loop = true;
+
+        // Aspirate noise filter
+        const aspirateFilter = this.ctx.createBiquadFilter();
+        aspirateFilter.type = "bandpass";
+        aspirateFilter.frequency.value = 500;
+        aspirateFilter.Q.value = 0.5;
+        whiteNoise.connect(aspirateFilter);
+        aspirateFilter.connect(this.worklet);
+
+        // Fricative noise filter
+        const fricativeFilter = this.ctx.createBiquadFilter();
+        fricativeFilter.type = "bandpass";
+        fricativeFilter.frequency.value = 1000;
+        fricativeFilter.Q.value = 0.5;
+        whiteNoise.connect(fricativeFilter);
+        fricativeFilter.connect(this.worklet);
+
+        whiteNoise.start(0);
         this.unmute();
         this.started = true;
     },
@@ -87,17 +118,8 @@ class Button
     }
 }
 
-const UI =
+const MainUI =
 {
-    originX: 340,
-    originY: 449,
-    radius: 298,
-    scale: 60,
-    angleOffset: -0.24,
-    angleScale: 0.64,
-
-    lipStart: 0, // ! Incorrect !
-
     inTitleCard: true,
     inInstructionCard: false,
     touches: [],
@@ -106,15 +128,8 @@ const UI =
     left: 0,
     time: 0,
 
-    // ! Incomplete !
     init: function ()
     {
-        // Canvases
-        this.tractCanvas = document.querySelector("#tractCanvas");
-        this.tractCtx = this.tractCanvas.getContext("2d");
-        this.backCanvas = document.querySelector("#backCanvas");
-        this.backCtx = this.backCanvas.getContext("2d");
-
         // Buttons
         this.aboutButton = new Button(460, 392, 140, 30, "About...", true);
         this.alwaysVoiceButton = new Button(460, 428, 140, 30, "Always voice", true);
@@ -126,61 +141,62 @@ const UI =
         });
 
         // Touch events
-        this.tractCanvas.addEventListener("touchstart", function (event) {
+        canvas.addEventListener("touchstart", function (event) {
             event.preventDefault();
-            UI.startTouches(event.changedTouches);
+            MainUI.startTouches(event.changedTouches);
         });
-        this.tractCanvas.addEventListener("touchmove", function (event) {
-            UI.moveTouches(event.changedTouches);
+        canvas.addEventListener("touchmove", function (event) {
+            MainUI.moveTouches(event.changedTouches);
         });
-        this.tractCanvas.addEventListener("touchend", function (event) {
-            UI.endTouches(event.changedTouches);
+        canvas.addEventListener("touchend", function (event) {
+            MainUI.endTouches(event.changedTouches);
         });
-        this.tractCanvas.addEventListener("touchcancel", function (event) {
-            UI.endTouches(event.changedTouches);
+        canvas.addEventListener("touchcancel", function (event) {
+            MainUI.endTouches(event.changedTouches);
         });
 
         // Mouse events
         document.addEventListener("mousedown", function (event) {
             event.preventDefault();
-            UI.startTouches([ {
+            MainUI.startTouches([ {
                 pageX: event.pageX,
                 pageY: event.pageY,
                 identifier: "mouse"
             } ]);
         });
         document.addEventListener("mousemove", function (event) {
-            UI.moveTouches([ {
+            MainUI.moveTouches([ {
                 pageX: event.pageX,
                 pageY: event.pageY,
                 identifier: "mouse"
             } ]);
         });
         document.addEventListener("mouseup", function (event) {
-            UI.endTouches([ {
+            MainUI.endTouches([ {
                 pageX: event.pageX,
                 pageY: event.pageY,
                 identifier: "mouse"
             } ]);
         });
 
-        // ...
+        Glottis.init();
+        Tract.init();
 
         requestAnimationFrame(this.draw.bind(this));
     },
 
-    // ! Incomplete !
     draw: function ()
     {
         this.time = Date.now() / 1000;
         this.resize();
-        this.tractCtx.clearRect(0, 0, this.tractCanvas.width, this.tractCanvas.height);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        this.aboutButton.draw(this.tractCtx);
-        this.alwaysVoiceButton.draw(this.tractCtx);
-        this.pitchWobbleButton.draw(this.tractCtx);
+        this.aboutButton.draw(ctx);
+        this.alwaysVoiceButton.draw(ctx);
+        this.pitchWobbleButton.draw(ctx);
 
-        // ...
+        Glottis.draw();
+        Tract.draw();
 
         if (this.inTitleCard)
             this.drawTitleCard();
@@ -206,18 +222,6 @@ const UI =
         return [x, y];
     },
 
-    getTractPosition: function (x,y)
-    {
-        const xx = x - this.originX;
-        const yy = y - this.originY;
-        const angle = Math.atan2(yy, xx) + Math.PI - this.angleOffset;
-        const length = Math.sqrt(xx*xx + yy*yy);
-
-        const index = angle * (this.lipStart - 1) / (this.angleScale * Math.PI);
-        const diameter = (this.radius - length) / this.scale;
-        return [index, diameter];
-    },
-
     startTouches: function (touches)
     {
         Audio.init();
@@ -238,7 +242,7 @@ const UI =
             touch.alive = true;
             touch.id = _touch.identifier;
             [touch.x, touch.y] = this.getTouchPosition(_touch);
-            [touch.index, touch.diameter] = this.getTractPosition(touch.x, touch.y);
+            [touch.index, touch.diameter] = Tract.getTractPosition(touch.x, touch.y);
             touch.fricativeIntensity = 0;
             this.touches.push(touch);
             this.aboutButton.handleTouchStart(touch);
@@ -254,7 +258,7 @@ const UI =
             const touch = this.getTouchById(_touch.identifier);
             if (touch != null) {
                 [touch.x, touch.y] = this.getTouchPosition(_touch);
-                [touch.index, touch.diameter] = this.getTractPosition(touch.x, touch.y);
+                [touch.index, touch.diameter] = Tract.getTractPosition(touch.x, touch.y);
             }
         }
         this.handleTouches();
@@ -289,14 +293,11 @@ const UI =
         }
         document.body.style.marginLeft = this.left + "px";
         document.body.style.marginTop = this.top + "px";
-        this.tractCanvas.style.width = this.width + "px";
-        this.backCanvas.style.width = this.width + "px";
+        canvas.style.width = this.width + "px";
     },
 
     drawTitleCard: function ()
     {
-        const ctx = this.tractCtx;
-
         // Backdrop
         ctx.globalAlpha = 0.8;
         ctx.fillStyle = "white";
@@ -321,7 +322,6 @@ const UI =
     drawInstructionCard: function ()
     {
         Audio.mute();
-        const ctx = this.tractCtx;
         ctx.globalAlpha = 0.85;
         ctx.fillStyle = "white";
         ctx.fillRect(0,0,600,600);
@@ -369,9 +369,223 @@ const UI =
         }
     },
 
-    // ! Incomplete !
+    handleTouches: function ()
+    {
+        Glottis.handleTouches();
+        Tract.handleTouches();
+    }
+};
+
+const Glottis =
+{
+    init: function ()
+    {},
+
+    draw: function ()
+    {},
+
     handleTouches: function ()
     {}
 };
 
-UI.init();
+const Tract =
+{
+    originX: 340,
+    originY: 449,
+    radius: 298,
+    scale: 60,
+    angleOffset: -0.24,
+    angleScale: 0.64,
+
+    n: 44,
+    bladeStart: 10,
+    tipStart: 32,
+    lipStart: 39,
+    noseLength: 28,
+    noseOffset : -0.8,
+
+    // TODO: Allow tongue position to be controlled
+    tongueIndex: 12.9,
+    tongueDiameter: 2.43,
+
+    init: function ()
+    {
+        this.diameter = new Float64Array(this.n);
+        this.restDiameter = new Float64Array(this.n);
+        for (var i = 0; i < this.n; i++) {
+            var diameter = 0;
+            if (i < 7 * this.n / 44 + 0.5) diameter = 0.6;
+            else if (i < 12 * this.n / 44) diameter = 1.1;
+            else diameter = 1.5;
+            this.diameter[i] = this.restDiameter[i] = diameter;
+        }
+
+        this.noseStart = this.n - this.noseLength + 1;
+        this.noseDiameter = new Float64Array(this.noseLength);
+        for (var i = 0; i < this.noseLength; i++) {
+            const d = 2 * i / this.noseLength;
+            var diameter;
+            if (d < 1) diameter = 0.4 + 1.6 * d;
+            else diameter = 0.5 + 1.5 * (2 - d);
+            diameter = Math.min(diameter, 1.9);
+            this.noseDiameter[i] = diameter;
+        }
+    },
+
+    draw: function ()
+    {
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        const velum = this.noseDiameter[0];
+        const velumAngle = velum * 4;
+
+        // TODO: Tongue control
+
+        // Oral cavity fill
+        ctx.beginPath();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "pink";
+        ctx.fillStyle = "pink";
+        this.moveTo(1, 0);
+        for (var i = 1; i < this.n; i++)
+            this.lineTo(i, this.diameter[i]);
+        for (var i = this.n-1; i >= 2; i--)
+            this.lineTo(i, 0);
+        ctx.closePath();
+        // ctx.stroke();
+        ctx.fill();
+
+        // Nasal cavity fill
+        ctx.beginPath();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "pink";
+        ctx.fillStyle = "pink";
+        this.moveTo(this.noseStart, this.noseOffset);
+        for (var i = 1; i < this.noseLength; i++)
+            this.lineTo(i + this.noseStart, this.noseOffset - this.noseDiameter[i] * 0.9);
+        for (var i = this.noseLength - 1; i >= 1; i--)
+            this.lineTo(i + this.noseStart, this.noseOffset);
+        ctx.closePath();
+        ctx.fill();
+
+        // Velum fill
+        ctx.beginPath();
+        // ctx.lineWidth = 2;
+        // ctx.strokeStyle = "pink";
+        // ctx.fillStyle = "pink";
+        this.moveTo(this.noseStart - 2, 0);
+        this.lineTo(this.noseStart, this.noseOffset);
+        this.lineTo(this.noseStart + velumAngle, this.noseOffset);
+        this.lineTo(this.noseStart + velumAngle - 2, 0);
+        ctx.closePath();
+        // ctx.stroke();
+        ctx.fill();
+
+        // Text
+        ctx.fillStyle = "white";
+        ctx.font = "20px Arial";
+        ctx.textAlign = "center";
+        ctx.globalAlpha = 1.0;
+        this.drawText(this.n * 0.1, 0.425, "throat");
+        this.drawText(this.n * 0.71, -1.8, "nasal");
+        this.drawText(this.n * 0.71, -1.3, "cavity");
+        ctx.font = "22px Arial";
+        this.drawText(this.n * 0.6, 0.9, "oral");
+        this.drawText(this.n * 0.7, 0.9, "cavity");
+        ctx.fillStyle = "orchid";
+        ctx.globalAlpha = 0.7;
+        this.drawText(this.n * 0.95, 0.8 + 0.8 * this.diameter[this.n - 1], "lip");
+
+        // TODO: Draw amplitudes?
+
+        // Oral cavity stroke
+        ctx.beginPath();
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = "#C070C6";
+        // ctx.lineJoin = "round";
+        // ctx.lineCap = "round";
+        this.moveTo(1, this.diameter[0]);
+        for (var i = 2; i < this.n; i++)
+            this.lineTo(i, this.diameter[i]);
+        this.moveTo(1, 0);
+        for (var i = 2; i <= this.noseStart - 2; i++)
+            this.lineTo(i, 0);
+        this.moveTo(this.noseStart + velumAngle - 2, 0);
+        for (var i = this.noseStart + Math.ceil(velumAngle) - 2; i < this.n; i++)
+            this.lineTo(i, 0);
+        ctx.stroke();
+
+        // Nasal cavity stroke
+        ctx.beginPath();
+        // ctx.lineWidth = 5;
+        // ctx.strokeStyle = "#C070C6";
+        // ctx.lineJoin = "round";
+        this.moveTo(this.noseStart, this.noseOffset);
+        for (var i = 1; i < this.noseLength; i++)
+            this.lineTo(i + this.noseStart, this.noseOffset - this.noseDiameter[i] * 0.9);
+        this.moveTo(this.noseStart + velumAngle, this.noseOffset);
+        for (var i = Math.ceil(velumAngle); i < this.noseLength; i++)
+            this.lineTo(i + this.noseStart, this.noseOffset);
+        ctx.stroke();
+
+        // Velum stroke
+        ctx.globalAlpha = velum * 5;
+        ctx.beginPath();
+        this.moveTo(this.noseStart - 2, 0);
+        this.lineTo(this.noseStart, this.noseOffset);
+        this.moveTo(this.noseStart + velumAngle - 2, 0);
+        this.lineTo(this.noseStart + velumAngle, this.noseOffset);
+        ctx.stroke();
+    },
+
+    handleTouches: function ()
+    {},
+
+    getTractPosition: function (x, y)
+    {
+        const xx = x - this.originX;
+        const yy = y - this.originY;
+        const angle = Math.atan2(yy, xx) + Math.PI - this.angleOffset;
+        const length = Math.sqrt(xx*xx + yy*yy);
+
+        const index = angle * (this.lipStart - 1) / (this.angleScale * Math.PI);
+        const diameter = (this.radius - length) / this.scale;
+        return [index, diameter];
+    },
+
+    moveTo: function (i, d)
+    {
+        // TODO: Wobble based on sound intensity?
+        const angle = this.angleOffset + i * this.angleScale * Math.PI / (this.lipStart - 1);
+        const r = this.radius - this.scale * d;
+        const x = this.originX - r * Math.cos(angle);
+        const y = this.originY - r * Math.sin(angle);
+        ctx.moveTo(x, y);
+    },
+
+    lineTo: function (i, d)
+    {
+        // TODO: Wobble based on sound intensity?
+        const angle = this.angleOffset + i * this.angleScale * Math.PI / (this.lipStart - 1);
+        const r = this.radius - this.scale * d;
+        const x = this.originX - r * Math.cos(angle);
+        const y = this.originY - r * Math.sin(angle);
+        ctx.lineTo(x, y);
+    },
+
+    drawText: function (i, d, text)
+    {
+        const angle = this.angleOffset + i * this.angleScale * Math.PI / (this.lipStart - 1);
+        const r = this.radius - this.scale * d;
+        const x = this.originX - r * Math.cos(angle);
+        const y = this.originY - r * Math.sin(angle);
+        ctx.save();
+        ctx.translate(x, y + 2);
+        ctx.rotate(angle - Math.PI / 2);
+        ctx.fillText(text, 0, 0);
+        ctx.restore();
+    }
+};
+
+MainUI.init();
