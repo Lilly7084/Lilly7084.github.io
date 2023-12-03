@@ -5,6 +5,12 @@ Math.clamp = function (num, min, max)
     else return num;
 }
 
+Math.moveTowards = function (current, target, up, down)
+{
+    if (current < target) return Math.min(current + up, target);
+    else return Math.max(current - down, target);
+}
+
 const canvas = document.querySelector("#tractCanvas");
 const ctx = canvas.getContext("2d");
 
@@ -187,7 +193,10 @@ const MainUI =
 
     draw: function ()
     {
-        this.time = Date.now() / 1000;
+        const _time = Date.now() / 1000;
+        const deltaTime = _time - this.time;
+
+        this.time = _time;
         this.resize();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -195,8 +204,8 @@ const MainUI =
         this.alwaysVoiceButton.draw(ctx);
         this.pitchWobbleButton.draw(ctx);
 
-        Glottis.draw();
-        Tract.draw();
+        Glottis.draw(deltaTime);
+        Tract.draw(deltaTime);
 
         if (this.inTitleCard)
             this.drawTitleCard();
@@ -381,7 +390,7 @@ const Glottis =
     init: function ()
     {},
 
-    draw: function ()
+    draw: function (deltaTime)
     {},
 
     handleTouches: function ()
@@ -396,6 +405,7 @@ const Tract =
     scale: 60,
     angleOffset: -0.24,
     angleScale: 0.64,
+    gridOffset: 1.7,
 
     n: 44,
     bladeStart: 10,
@@ -404,20 +414,25 @@ const Tract =
     noseLength: 28,
     noseOffset : -0.8,
 
+    movementSpeed: 15,
+    tongueRadiusMin: 2.05,
+    tongueRadiusMax: 3.5,
+
     // TODO: Allow tongue position to be controlled
+    tongueTouch: null,
     tongueIndex: 12.9,
     tongueDiameter: 2.43,
 
     init: function ()
     {
         this.diameter = new Float64Array(this.n);
-        this.restDiameter = new Float64Array(this.n);
+        this.targetDiameter = new Float64Array(this.n);
         for (var i = 0; i < this.n; i++) {
             var diameter = 0;
             if (i < 7 * this.n / 44 + 0.5) diameter = 0.6;
             else if (i < 12 * this.n / 44) diameter = 1.1;
             else diameter = 1.5;
-            this.diameter[i] = this.restDiameter[i] = diameter;
+            this.diameter[i] = this.targetDiameter[i] = diameter;
         }
 
         this.noseStart = this.n - this.noseLength + 1;
@@ -430,17 +445,25 @@ const Tract =
             diameter = Math.min(diameter, 1.9);
             this.noseDiameter[i] = diameter;
         }
+
+        this.tongueIndexMin = this.bladeStart + 2;
+        this.tongueIndexMax = this.tipStart - 3;
+
+        this.setRestDiameter();
+        this.reshapeTract(0.1);
     },
 
-    draw: function ()
+    draw: function (deltaTime)
     {
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
 
+        this.reshapeTract(deltaTime);
+
         const velum = this.noseDiameter[0];
         const velumAngle = velum * 4;
 
-        // TODO: Tongue control
+        this.drawTongueControl();
 
         // Oral cavity fill
         ctx.beginPath();
@@ -493,6 +516,7 @@ const Tract =
         ctx.font = "22px Arial";
         this.drawText(this.n * 0.6, 0.9, "oral");
         this.drawText(this.n * 0.7, 0.9, "cavity");
+
         ctx.fillStyle = "orchid";
         ctx.globalAlpha = 0.7;
         this.drawText(this.n * 0.95, 0.8 + 0.8 * this.diameter[this.n - 1], "lip");
@@ -539,8 +563,93 @@ const Tract =
         ctx.stroke();
     },
 
+    drawTongueControl: function ()
+    {
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = "#FFEEF5";
+        ctx.fillStyle = "#FFEEF5";
+        ctx.globalAlpha = 1.0;
+        ctx.lineWidth = 45;
+
+        // Outline
+        const tongueIndexCenter = (this.tongueIndexMin + this.tongueIndexMax) * 0.5;
+        ctx.beginPath();
+        this.moveTo(this.tongueIndexMin, this.tongueRadiusMin);
+        for (var i = this.tongueIndexMin + 1; i <= this.tongueIndexMax; i++)
+            this.lineTo(i, this.tongueRadiusMin);
+        this.lineTo(tongueIndexCenter, this.tongueRadiusMax);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fill();
+
+        // Reference locations
+        const tongueRadiusCenter = (this.tongueRadiusMin + this.tongueRadiusMax) * 0.5;
+        ctx.fillStyle = "orchid";
+        ctx.globalAlpha = 0.3;
+        const r = 3;
+        this.drawCircle(tongueIndexCenter - 8.5, this.tongueRadiusMin, r);
+        this.drawCircle(tongueIndexCenter - 4.25, this.tongueRadiusMin, r);
+        this.drawCircle(tongueIndexCenter, this.tongueRadiusMin, r);
+        this.drawCircle(tongueIndexCenter + 4.25, this.tongueRadiusMin, r);
+        this.drawCircle(tongueIndexCenter + 8.5, this.tongueRadiusMin, r);
+        this.drawCircle(tongueIndexCenter - 6.1, tongueRadiusCenter, r);
+        this.drawCircle(tongueIndexCenter, tongueRadiusCenter, r);
+        this.drawCircle(tongueIndexCenter + 6.1, tongueRadiusCenter, r);
+        this.drawCircle(tongueIndexCenter, this.tongueRadiusMax, r);
+
+        // Current location
+        // Can't use drawCircle() because this wants a stroke as well as a fill
+        const [x, y, _] = this.getScreenPosition(this.tongueIndex, this.tongueDiameter);
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = "orchid";
+        ctx.beginPath();
+        ctx.arc(x, y, 18, 0, 2 * Math.PI);
+        ctx.globalAlpha = 0.7;
+        ctx.stroke();
+        ctx.globalAlpha = 0.15;
+        ctx.fill();
+    },
+
     handleTouches: function ()
-    {},
+    {
+        // Let tongue touch expire
+        if (this.tongueTouch != null && !this.tongueTouch.alive)
+            this.tongueTouch = null;
+
+        // Pick a relevant touch for the tongue
+        if (this.tongueTouch == null)
+            for (const touch of MainUI.touches) {
+                if (!touch.alive) continue;
+                if (touch.fricativeIntensity == 1) continue; // Ignores old touches
+                if (this.isTongueTouchValid(touch)) {
+                    this.tongueTouch = touch;
+                    break;
+                }
+            }
+
+        // Handle the tongue touch
+        if (this.tongueTouch != null /*&& this.isTongueTouchValid(this.tongueTouch)*/) {
+            const fromLerp = (this.tongueRadiusMax - this.tongueTouch.diameter) / (this.tongueRadiusMax - this.tongueRadiusMin);
+            const fromClamp = Math.clamp(fromLerp, 0, 1);
+            // "horrible kludge" (Thapen's own words in the source comments) to fit fromClamp to a straight line.
+            // I don't understand this, so I've just copied it over completely.
+            const fromPoint = Math.pow(fromClamp, 0.58) - 0.2 * (fromClamp * fromClamp - fromClamp);
+            const range = 0.5 * fromPoint * (this.tongueIndexMax - this.tongueIndexMin);
+            const tongueIndexCenter = (this.tongueIndexMin + this.tongueIndexMax) * 0.5;
+            this.tongueIndex = Math.clamp(this.tongueTouch.index, tongueIndexCenter - range, tongueIndexCenter + range);
+            this.tongueDiameter = Math.clamp(this.tongueTouch.diameter, this.tongueRadiusMin, this.tongueRadiusMax);
+        }
+        this.setRestDiameter();
+    },
+
+    isTongueTouchValid: function (touch)
+    {
+        return  touch.index >= this.tongueIndexMin - 4 &&
+                touch.index <= this.tongueIndexMax + 4 &&
+                touch.diameter >= this.tongueRadiusMin - 0.5 &&
+                touch.diameter <= this.tongueRadiusMax + 0.5;
+    },
 
     getTractPosition: function (x, y)
     {
@@ -554,38 +663,70 @@ const Tract =
         return [index, diameter];
     },
 
-    moveTo: function (i, d)
+    getScreenPosition: function (i, d)
     {
-        // TODO: Wobble based on sound intensity?
         const angle = this.angleOffset + i * this.angleScale * Math.PI / (this.lipStart - 1);
         const r = this.radius - this.scale * d;
         const x = this.originX - r * Math.cos(angle);
         const y = this.originY - r * Math.sin(angle);
+        return [x, y, angle];
+    },
+
+    moveTo: function (i, d)
+    {
+        // TODO: Wobble based on sound intensity?
+        const [x, y, _] = this.getScreenPosition(i, d);
         ctx.moveTo(x, y);
     },
 
     lineTo: function (i, d)
     {
         // TODO: Wobble based on sound intensity?
-        const angle = this.angleOffset + i * this.angleScale * Math.PI / (this.lipStart - 1);
-        const r = this.radius - this.scale * d;
-        const x = this.originX - r * Math.cos(angle);
-        const y = this.originY - r * Math.sin(angle);
+        const [x, y, _] = this.getScreenPosition(i, d);
         ctx.lineTo(x, y);
     },
 
     drawText: function (i, d, text)
     {
-        const angle = this.angleOffset + i * this.angleScale * Math.PI / (this.lipStart - 1);
-        const r = this.radius - this.scale * d;
-        const x = this.originX - r * Math.cos(angle);
-        const y = this.originY - r * Math.sin(angle);
+        const [x, y, angle] = this.getScreenPosition(i, d);
         ctx.save();
         ctx.translate(x, y + 2);
         ctx.rotate(angle - Math.PI / 2);
         ctx.fillText(text, 0, 0);
         ctx.restore();
-    }
+    },
+
+    drawCircle: function (i, d, radius)
+    {
+        const [x, y, _] = this.getScreenPosition(i, d);
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, 2 * Math.PI);
+        ctx.fill();
+    },
+
+    setRestDiameter: function ()
+    {
+        for (var i = this.bladeStart; i < this.lipStart; i++) {
+            const t = 1.1 * Math.PI * (this.tongueIndex - i) / (this.tipStart - this.bladeStart);
+            const fixed = 2 + (this.tongueDiameter - 2) / 1.5;
+            var curve = (1.5 - fixed + this.gridOffset) * Math.cos(t);
+            if (i == this.bladeStart - 2 || i == this.lipStart - 1) curve *= 0.8;
+            if (i == this.bladeStart || i == this.lipStart - 2) curve *= 0.94;
+            this.targetDiameter[i] = 1.5 - curve;
+        }
+    },
+
+    reshapeTract: function (deltaTime)
+    {
+        const amount = deltaTime * this.movementSpeed;
+        for (var i = 0; i < this.n; i++) {
+            var slowReturn;
+            if (i < this.noseStart) slowReturn = 0.6;
+            else if (i >= this.tipStart) slowReturn = 1.0;
+            else slowReturn = 0.6 + 0.4 * (i - this.noseStart) / (this.tipStart - this.noseStart);
+            this.diameter[i] = Math.moveTowards(this.diameter[i], this.targetDiameter[i], slowReturn * amount, 2 * amount);
+        }
+    },
 };
 
 MainUI.init();
