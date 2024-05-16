@@ -22,7 +22,8 @@ class TramboneProcessor extends AudioWorkletProcessor
             this.proc = Trambone.new(sampleRate);
         }
         else if (event.type == "send-params") {
-            // TODO: Implement
+            this.proc.set_frequency(event.frequency);
+            this.prox.set_tenseness(event.tenseness);
         }
     }
 
@@ -30,7 +31,9 @@ class TramboneProcessor extends AudioWorkletProcessor
     {
         const out = outputs[0][0]; // Attachment 0, channel 0 (TODO: Does this output left only?)
         for (var j = 0; j < out.length; j++) {
-            out[j] = this.proc.run_step(0.); // TODO provide lambda
+            const lambda0 = j / out.length;
+            // TODO: Tract needs to be clocked twice as fast as glottis
+            out[j] = this.proc.run_step(lambda0);
         }
         this.proc.finish_block();
         return true;

@@ -65,6 +65,18 @@ export class Trambone {
     finish_block() {
         wasm.trambone_finish_block(this.__wbg_ptr);
     }
+    /**
+    * @param {number} frequency
+    */
+    set_frequency(frequency) {
+        wasm.trambone_set_frequency(this.__wbg_ptr, frequency);
+    }
+    /**
+    * @param {number} tenseness
+    */
+    set_tenseness(tenseness) {
+        wasm.trambone_set_tenseness(this.__wbg_ptr, tenseness);
+    }
 }
 
 async function __wbg_load(module, imports) {
