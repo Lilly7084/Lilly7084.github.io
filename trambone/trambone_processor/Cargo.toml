@@ -1,0 +1,15 @@
+[package]
+name = "trambone_processor"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = [ "cdylib", "rlib" ]
+
+[features]
+default = [ "console_error_panic_hook", "wee_alloc" ]
+
+[dependencies]
+console_error_panic_hook = { version = "0.1.1", optional = true }
+wasm-bindgen = "0.2.63"
+wee_alloc = { version = "0.4.2", optional = true }
