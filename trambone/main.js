@@ -5,6 +5,13 @@ const PALE_PINK = "#ffeef5";
 const DARK_PINK = "#c070c6";
 const FONT = (size) => size.toString() + "px Arial";
 
+Math.clamp = function(number, min, max)
+{
+    if (number<min) return min;
+    else if (number>max) return max;
+    else return number;
+}
+
 class Button
 {
     constructor (x, y, width, height, text, state)
@@ -133,18 +140,165 @@ const Glottis =
 {
     frequency: 140.6,
     tenseness: 0.6,
+    x: 240,
+    y: 530,
+    touch: 0,
+
+    KEYBOARD_LEFT: 0,
+    KEYBOARD_TOP: 500,
+    KEYBOARD_WIDTH: 600,
+    KEYBOARD_HEIGHT: 100,
+    BAR1_TOP: 0.0,
+    BAR1_BOTTOM: 0.4,
+    BAR2_TOP: 0.52,
+    BAR2_BOTTOM: 0.72,
+    SEMITONES: 20,
+    SEMI_MARKS: [0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0],
+    BASE_NOTE: 87.3071, // F2
 
     init: function ()
     {},
 
     draw: function (ctx)
-    {},
+    {
+        this.drawKeyboard(ctx);
+        // Pitch control
+        const w = 9;
+        const h = 15;
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = "orchid";
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(this.x - w, this.y - h);
+        ctx.lineTo(this.x + w, this.y - h);
+        ctx.lineTo(this.x + w, this.y + h);
+        ctx.lineTo(this.x - w, this.y + h);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.globalAlpha = 0.15;
+        ctx.fill();
+    },
 
     handleTouches: function (touches)
-    {},
+    {
+        // Release current touch handle if it's dead
+        if (this.touch != 0 && !this.touch.alive)
+            this.touch = 0;
+        // Find a suitable touch to fill its place
+        if (this.touch == 0)
+            for (var j = 0; j < touches.length; j++) {
+                const touch = touches[j];
+                if (!touch.alive ||
+                    touch.x < this.KEYBOARD_LEFT ||
+                    touch.x > this.KEYBOARD_LEFT + this.KEYBOARD_WIDTH ||
+                    touch.y < this.KEYBOARD_TOP ||
+                    touch.y > this.KEYBOARD_TOP + this.KEYBOARD_HEIGHT)
+                    continue;
+                this.touch = touch;
+            }
+        // The rest of the code is only relevant if there is a touch
+        if (this.touch == 0)
+            return;
+        // TODO: Refactor and clean up this code, ported from original PT
+        const y = Math.clamp(this.touch.y - this.KEYBOARD_TOP - 10,
+                0, this.KEYBOARD_HEIGHT - 26);
+        this.x = this.touch.x;
+        this.y = y + this.KEYBOARD_TOP + 10;
+        const semitone = (this.touch.x - this.KEYBOARD_LEFT)
+                * this.SEMITONES / this.KEYBOARD_WIDTH + 0.5;
+        this.frequency = this.BASE_NOTE * Math.pow(2, semitone / 12);
+        // if (Glottis.intensity == 0) Glottis.smoothFrequency = Glottis.UIFrequency;
+        const t = Math.clamp(1 - y / (this.KEYBOARD_HEIGHT - 28), 0, 1);
+        // FIXME: Really low tenseness makes the sound cut out.
+        // I don't know where this issue is coming from, but Pink Trombone doesn't have it.
+        this.tenseness = 1 - Math.cos(0.5 * Math.PI * t);
+        // Glottis.loudness = Math.pow(Glottis.UITenseness, 0.25);
+    },
 
     handleTouchStart: function (touch)
-    {}
+    {},
+
+
+    drawKeyboard: function (ctx)
+    {
+        ctx.strokeStyle = PALE_PINK;
+        ctx.fillStyle = PALE_PINK;
+        ctx.globalAlpha = 1.0;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        this.drawRibbon(ctx, this.BAR1_TOP, this.BAR1_BOTTOM, 8);
+        this.drawRibbon(ctx, this.BAR2_TOP, this.BAR2_BOTTOM, 8);
+        // Vertical markings
+        ctx.strokeStyle = "orchid";
+        ctx.fillStyle = "orchid";
+        const keyWidth = this.KEYBOARD_WIDTH / this.SEMITONES;
+        const radius = 9;
+        for (var j = 0; j < this.SEMITONES; j++) {
+            const x = this.KEYBOARD_LEFT + (j + 1/2) * keyWidth;
+            const marked = this.SEMI_MARKS[(j + 3) % 12] == 1;
+            // Top ribbon
+            ctx.lineWidth = marked ? 4 : 3;
+            ctx.globalAlpha = marked ? 0.4 : 0.2;
+            ctx.beginPath();
+            ctx.moveTo(x, this.KEYBOARD_TOP + this.KEYBOARD_HEIGHT * this.BAR1_TOP    + radius);
+            ctx.lineTo(x, this.KEYBOARD_TOP + this.KEYBOARD_HEIGHT * this.BAR1_BOTTOM - radius);
+            ctx.stroke();
+            // Bottom ribbon
+            ctx.lineWidth = 3;
+            ctx.globalAlpha = 0.15;
+            ctx.beginPath();
+            ctx.moveTo(x, this.KEYBOARD_TOP + this.KEYBOARD_HEIGHT * this.BAR2_TOP    + radius);
+            ctx.lineTo(x, this.KEYBOARD_TOP + this.KEYBOARD_HEIGHT * this.BAR2_BOTTOM - radius);
+            ctx.stroke();
+        }
+        // Text
+        ctx.font = FONT(17);
+        ctx.textAlign = "center";
+        ctx.globalAlpha = 0.7;
+        ctx.fillText("voicebox control", 300, 490);
+        ctx.fillText("pitch", 300, 592);
+        // Arrows 
+        ctx.globalAlpha = 0.3;
+        ctx.save();
+        ctx.translate(410, 587);
+        this.drawArrow(ctx, 80, 2, 10);
+        ctx.translate(-220, 0);
+        ctx.rotate(Math.PI);
+        this.drawArrow(ctx, 80, 2, 10);
+        ctx.restore();
+    },
+
+    drawRibbon: function (ctx, topFac, bottomFac, radius)
+    {
+        const left = this.KEYBOARD_LEFT + radius;
+        const right = this.KEYBOARD_LEFT + this.KEYBOARD_WIDTH - radius;
+        const top = this.KEYBOARD_TOP + topFac * this.KEYBOARD_HEIGHT + radius;
+        const bottom = this.KEYBOARD_TOP + bottomFac * this.KEYBOARD_HEIGHT - radius;
+        ctx.lineWidth = radius * 2; 
+        ctx.beginPath();
+        ctx.moveTo(left, top);
+        ctx.lineTo(right, top);
+        ctx.lineTo(right, bottom);
+        ctx.lineTo(left, bottom);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fill();
+    },
+
+    drawArrow: function (ctx, length, headWidth, headLength)
+    {
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-length, 0);
+        ctx.lineTo(0, 0);
+        ctx.lineTo(0, -headWidth);
+        ctx.lineTo(headLength, 0);
+        ctx.lineTo(0, headWidth);
+        ctx.lineTo(0, 0);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fill();
+    }
 };
 
 const UI =
