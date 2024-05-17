@@ -172,7 +172,7 @@ impl Glottis {
         self.old_frequency = self.new_frequency;
         self.new_frequency = self.target_frequency * (1. + freq_mod);
         self.old_tenseness = self.new_tenseness;
-        self.new_tenseness = self.target_tenseness + tense_mod;
+        self.new_tenseness = clamp(self.target_tenseness + tense_mod, 0., 1.);
     }
 
 
@@ -226,7 +226,8 @@ impl Glottis {
     fn noise_modulator(&self, t: Sample) -> (Sample, Sample) {
         let voiced = 0.1 + 0.2 * Sample::max(0., Sample::sin(2. * PI * t));
         let fricative = lerp(0.3, voiced, self.tenseness);
-        let aspirate = fricative * (1. - Sample::sqrt(self.tenseness))
+        let aspirate = fricative
+            * (1. - Sample::sqrt(self.tenseness))
             * (0.2 + 0.02 * self.noise1d(self.total_time * 1.99));
         ( aspirate, fricative )
     }
