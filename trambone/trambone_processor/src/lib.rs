@@ -1,5 +1,8 @@
 // wasm-pack build --target web
 // then copy the *_bg.wasm and *.js into the parent dir of the crate
+use biquad::coefficients::{ Coefficients, Type };
+use biquad::frequency::*;
+use biquad::{ Biquad, DirectForm2Transposed };
 use noise::{ NoiseFn, Simplex };
 use wasm_bindgen::prelude::*;
 
@@ -32,11 +35,10 @@ pub struct Trambone {
 impl Trambone {
     pub fn new(sample_rate: Sample, noise_buf: Vec<Sample>) -> Trambone {
         console_error_panic_hook::set_once();
-        let delta_time = 1. / sample_rate;
         Trambone {
             noise_buf: noise_buf,
             noise_idx: 0,
-            glottis: Glottis::new(delta_time, 140., 0.6)
+            glottis: Glottis::new(sample_rate, 140., 0.6)
         }
     }
 
@@ -68,6 +70,8 @@ impl Trambone {
 
 pub struct Glottis {
     simplex: Simplex,
+    aspirate_filter: DirectForm2Transposed::<Sample>,
+    fricative_filter: DirectForm2Transposed::<Sample>,
     // Settings
     target_frequency: Sample,
     target_tenseness: Sample,
@@ -95,9 +99,16 @@ pub struct Glottis {
 }
 
 impl Glottis {
-    pub fn new(delta_time: Sample, frequency: Sample, tenseness: Sample) -> Glottis {
+    pub fn new(sample_rate: Sample, frequency: Sample, tenseness: Sample) -> Glottis {
+        let delta_time = 1. / sample_rate;
+        let aspirate_coeffs = Coefficients::<Sample>::from_params(
+            /*type*/Type::BandPass, /*fs*/sample_rate.hz(), /*f0*/500.hz(), /*Q*/0.5).unwrap();
+        let fricative_coeffs = Coefficients::<Sample>::from_params(
+            /*type*/Type::BandPass, /*fs*/sample_rate.hz(), /*f0*/1000.hz(), /*Q*/0.5).unwrap();
         let mut g = Glottis {
             simplex: Simplex::default(),
+            aspirate_filter: DirectForm2Transposed::<Sample>::new(aspirate_coeffs),
+            fricative_filter: DirectForm2Transposed::<Sample>::new(fricative_coeffs),
             // Settings
             target_frequency: frequency,
             target_tenseness: tenseness,
@@ -138,8 +149,10 @@ impl Glottis {
         }
         // Synthesis
         let glottal = self.normalized_lf_waveform(t);
-        let (aspirate, fricative) = self.noise_modulator(t);
-        ( glottal + noise * aspirate, noise * fricative )
+        let (aspirate_mod, fricative_mod) = self.noise_modulator(t);
+        let aspirate = self.aspirate_filter.run(noise) * aspirate_mod;
+        let fricative = self.fricative_filter.run(noise) * fricative_mod;
+        ( glottal + aspirate, fricative )
     }
 
     pub fn finish_block(&mut self) {

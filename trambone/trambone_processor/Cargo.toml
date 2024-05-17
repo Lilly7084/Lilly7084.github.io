@@ -10,6 +10,7 @@ crate-type = [ "cdylib", "rlib" ]
 default = [ "console_error_panic_hook", "wee_alloc" ]
 
 [dependencies]
+biquad = "0.4.2"
 console_error_panic_hook = { version = "0.1.1", optional = true }
 noise = "0.9"
 wasm-bindgen = "0.2.63"
