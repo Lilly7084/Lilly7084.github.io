@@ -59,16 +59,18 @@ class Button
 
 const AudioSystem =
 {
+    loading: false,
     ready: false,
 
-    init: async function ()
+    init: function ()
     {
+        if (this.loading)
+            return; // Don't let init() be poked more than once.
+        this.loading = true;
         window.AudioContext = window.AudioContext||window.webkitAudioContext;
         this.ctx = new AudioContext();
         // await this.ctx.resume();
-        await this.initProcessor();
-        this.unmute();
-        this.ready = true;
+        this.initProcessor();
     },
 
     initProcessor: async function ()
@@ -91,12 +93,29 @@ const AudioSystem =
     onProcMessage: function (data)
     {
         if (data.type == "wasm-loaded") {
-            console.log("Remote processor assembly loaded.");
+            // WASM module has been loaded. Now to instantiate the synth.
             this.proc.port.postMessage({
                 type: "init",
                 sampleRate: this.ctx.sampleRate
-            })
+            });
         }
+        else if (data.type == "ready") {
+            // Synth is ready, so patch it in!
+            console.log("Audio synthesizer initialized.");
+            this.unmute();
+            this.ready = true;
+        }
+    },
+
+    pushParams: function ()
+    {
+        if (this.ready) // Only push if the synth is ready to handle the message
+            this.proc.port.postMessage({
+                type: "send-params",
+                frequency: Glottis.frequency,
+                tenseness: Glottis.tenseness,
+                pitchWobble: UI.wobbleButton.state
+            });
     },
 
     mute: function ()
@@ -110,6 +129,24 @@ const AudioSystem =
     }
 };
 
+const Glottis =
+{
+    frequency: 140.6,
+    tenseness: 0.6,
+
+    init: function ()
+    {},
+
+    draw: function (ctx)
+    {},
+
+    handleTouches: function (touches)
+    {},
+
+    handleTouchStart: function (touch)
+    {}
+};
+
 const UI =
 {
     inTitleScreen: true,
@@ -120,14 +157,19 @@ const UI =
         this.aboutButton = new Button(460, 392, 140, 30, "about...", true);
         this.voiceButton = new Button(460, 428, 140, 30, "always voice", true);
         this.wobbleButton = new Button(460, 464, 140, 30, "pitch wobble", true);
+        // Subsystems
+        Glottis.init();
     },
 
     draw: function (ctx)
     {
+        AudioSystem.pushParams();
         // Buttons
         this.aboutButton.draw(ctx);
         this.voiceButton.draw(ctx);
         this.wobbleButton.draw(ctx);
+        // Subsystems
+        Glottis.draw(ctx);
         // Overlay screens
         if (this.inTitleScreen)
             this.drawTitleScreen(ctx);
@@ -136,13 +178,17 @@ const UI =
     },
 
     handleTouches: function (touches)
-    {},
+    {
+        // Ignore if we're in an overlay screen
+        if (this.inTitleScreen || !this.aboutButton.state)
+            return;
+        // Subsystems
+        Glottis.handleTouches(touches);
+    },
 
     handleTouchStart: function (touch)
     {
-        // Set up the audio now that we've been poked
-        if (!AudioSystem.ready)
-            AudioSystem.init();
+        AudioSystem.init(); // We've been poked, so the audio context will now work
         // Overlay screens
         if (this.inTitleScreen) {
             this.inTitleScreen = false;
@@ -157,6 +203,8 @@ const UI =
         this.aboutButton.handleTouchStart(touch);
         this.voiceButton.handleTouchStart(touch);
         this.wobbleButton.handleTouchStart(touch);
+        // Subsystems
+        Glottis.handleTouchStart(touch);
     },
 
 

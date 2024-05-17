@@ -10,20 +10,32 @@ class TramboneProcessor extends AudioWorkletProcessor
 
     message (event)
     {
-        if (event.type == "send-wasm") {
-            init(WebAssembly.compile(event.wasmBytes)).then(() => {
-                this.port.postMessage({
-                    type: "wasm-loaded"
+        switch (event.type) {
+            // Host is sending over the WASM module for the processor
+            case "send-wasm":
+                init(WebAssembly.compile(event.wasmBytes)).then(() => {
+                    this.port.postMessage({
+                        type: "wasm-loaded"
+                    });
                 });
-            });
-        }
-        else if (event.type == "init") {
-            const { sampleRate } = event;
-            this.proc = Trambone.new(sampleRate);
-        }
-        else if (event.type == "send-params") {
-            this.proc.set_frequency(event.frequency);
-            this.prox.set_tenseness(event.tenseness);
+                break;
+            // Host is telling us to (re)initialize the processor
+            case "init":
+                // Generate a 1 second noise buffer
+                var noiseBuf = [];
+                for (var j = 0; j < event.sampleRate; j++)
+                    noiseBuf.push(Math.random());
+                this.proc = Trambone.new(event.sampleRate, noiseBuf);
+                this.port.postMessage({
+                    type: "ready"
+                });
+                break;
+            // Host is sending a new batch of parameters
+            case "send-params":
+                this.proc.set_frequency(event.frequency);
+                this.proc.set_tenseness(event.tenseness);
+                this.proc.set_pitch_wobble(event.pitchWobble);
+                break;
         }
     }
 

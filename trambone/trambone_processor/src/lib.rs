@@ -1,11 +1,13 @@
 // wasm-pack build --target web
 // then copy the *_bg.wasm and *.js into the parent dir of the crate
+use noise::{ NoiseFn, Simplex };
 use wasm_bindgen::prelude::*;
 
 // Sample type
 type Sample = f32;
 // use std::f32::{ exp, ln, max, sin };
 use std::f32::consts::{ PI };
+const EPSILON: Sample = 0.0001;
 
 fn clamp(x: Sample, l: Sample, h: Sample) -> Sample {
     if x < l {l}
@@ -21,42 +23,55 @@ fn lerp(a: Sample, b: Sample, fac: Sample) -> Sample {
 
 #[wasm_bindgen]
 pub struct Trambone {
+    noise_buf: Vec<Sample>,
+    noise_idx: usize,
     glottis: Glottis
 }
 
 #[wasm_bindgen]
 impl Trambone {
-    pub fn new(sample_rate: Sample) -> Trambone {
+    pub fn new(sample_rate: Sample, noise_buf: Vec<Sample>) -> Trambone {
+        console_error_panic_hook::set_once();
         let delta_time = 1. / sample_rate;
         Trambone {
-            glottis: Glottis::new(delta_time)
+            noise_buf: noise_buf,
+            noise_idx: 0,
+            glottis: Glottis::new(delta_time, 140., 0.6)
         }
     }
 
     pub fn run_step(&mut self, lambda: Sample) -> Sample {
-        let (excitation, noise_modulator) = self.glottis.run_step(lambda);
-        excitation
+        let noise = self.noise_buf[self.noise_idx];
+        self.noise_idx = (self.noise_idx + 1) % self.noise_buf.len();
+        let (vocal, fricative) = self.glottis.run_step(lambda, noise);
+        vocal
     }
 
-    pub fn finish_block(&mut self) -> () {
+    pub fn finish_block(&mut self) {
         self.glottis.finish_block()
     }
 
-    pub fn set_frequency(&mut self, frequency: Sample) -> () {
+    pub fn set_frequency(&mut self, frequency: Sample) {
         self.glottis.target_frequency = frequency;
     }
 
-    pub fn set_tenseness(&mut self, tenseness: Sample) -> () {
+    pub fn set_tenseness(&mut self, tenseness: Sample) {
         self.glottis.target_tenseness = tenseness;
+    }
+
+    pub fn set_pitch_wobble(&mut self, wobble: bool) {
+        self.glottis.pitch_wobble = wobble;
     }
 }
 
-// ==================== Glottal source (Lin-Fant model) ====================
+// ==================== Glottal source ====================
 
 pub struct Glottis {
+    simplex: Simplex,
     // Settings
     target_frequency: Sample,
     target_tenseness: Sample,
+    pitch_wobble: bool,
     // Interpolators
     old_frequency: Sample,
     new_frequency: Sample,
@@ -74,25 +89,26 @@ pub struct Glottis {
     omega: Sample,
     // Synthesizer state
     delta_time: Sample,
+    total_time: Sample,
     time_in_waveform: Sample,
     waveform_length: Sample
 }
 
 impl Glottis {
-    pub fn new(delta_time: Sample) -> Glottis {
-        let FREQUENCY = 140.;
-        let TENSENESS = 0.6;
-        Glottis {
+    pub fn new(delta_time: Sample, frequency: Sample, tenseness: Sample) -> Glottis {
+        let mut g = Glottis {
+            simplex: Simplex::default(),
             // Settings
-            target_frequency: FREQUENCY,
-            target_tenseness: TENSENESS,
+            target_frequency: frequency,
+            target_tenseness: tenseness,
+            pitch_wobble: false,
             // Interpolators
-            old_frequency: FREQUENCY,
-            new_frequency: FREQUENCY,
-            frequency: FREQUENCY,
-            old_tenseness: TENSENESS,
-            new_tenseness: TENSENESS,
-            tenseness: TENSENESS,
+            old_frequency: frequency,
+            new_frequency: frequency,
+            frequency: frequency,
+            old_tenseness: tenseness,
+            new_tenseness: tenseness,
+            tenseness: tenseness,
             // DDS parameters
             te: 0.,
             epsilon: 0.,
@@ -103,39 +119,54 @@ impl Glottis {
             omega: 0.,
             // Synthesizer state
             delta_time: delta_time,
+            total_time: 0.,
             time_in_waveform: 0.,
-            waveform_length: 1. / FREQUENCY
-        }
+            waveform_length: 1. / frequency
+        };
+        g.setup_waveform(0.);
+        g
     }
 
-    // Returns excitation, then noise modulator
-    pub fn run_step(&mut self, lambda: Sample) -> (Sample, Sample) {
-        // Phase accumulator
+    // Returns excitation, then fricative noise source
+    pub fn run_step(&mut self, lambda: Sample, noise: Sample) -> (Sample, Sample) {
         let t = self.time_in_waveform / self.waveform_length;
+        self.total_time += self.delta_time;
         self.time_in_waveform += self.delta_time;
         if self.time_in_waveform >= self.waveform_length {
             self.time_in_waveform -= self.waveform_length;
             self.setup_waveform(lambda);
         }
         // Synthesis
-        ( self.normalized_lf_waveform(t), self.noise_modulator(t) )
+        let glottal = self.normalized_lf_waveform(t);
+        let (aspirate, fricative) = self.noise_modulator(t);
+        ( glottal + noise * aspirate, noise * fricative )
     }
 
-    pub fn finish_block(&mut self) -> () {
+    pub fn finish_block(&mut self) {
         // TODO: Exponentially approach target frequency
-        // TODO: Vibrato
+        // Parameter fluctuation
+        let mut freq_mod: Sample = 0.; // TODO: Vibrato LFO
+        freq_mod += 0.02 * self.noise1d(self.total_time * 4.07);
+        freq_mod += 0.04 * self.noise1d(self.total_time * 2.15);
+        if self.pitch_wobble {
+            freq_mod += 0.2 * self.noise1d(self.total_time * 0.98);
+            freq_mod += 0.4 * self.noise1d(self.total_time * 0.5);
+        }
+        let mut tense_mod: Sample = 0.;
+        tense_mod += 0.1 * self.noise1d(self.total_time * 0.46);
+        tense_mod += 0.05 * self.noise1d(self.total_time * 0.36);
         // Interpolators
         self.old_frequency = self.new_frequency;
-        self.new_frequency = self.target_frequency;
+        self.new_frequency = self.target_frequency * (1. + freq_mod);
         self.old_tenseness = self.new_tenseness;
-        self.new_tenseness = self.target_tenseness;
+        self.new_tenseness = self.target_tenseness + tense_mod;
     }
 
 
-    pub fn setup_waveform(&mut self, lambda: Sample) -> () {
+    fn setup_waveform(&mut self, lambda: Sample) {
         self.frequency = lerp(self.old_frequency, self.new_frequency, lambda);
         self.tenseness = lerp(self.old_tenseness, self.new_tenseness, lambda);
-        self.waveform_length = 1. / Sample::max(self.frequency, 0.0001);
+        self.waveform_length = 1. / Sample::max(self.frequency, EPSILON);
 
         let rd = clamp(3. * (1. - self.tenseness), 0.5, 2.7);
         let ra = -0.01 + 0.048 * rd;
@@ -170,15 +201,25 @@ impl Glottis {
         self.omega = omega;
     }
 
-    pub fn normalized_lf_waveform(&self, t: Sample) -> Sample {
-        if t > self.te
+    fn normalized_lf_waveform(&self, t: Sample) -> Sample {
+        if self.frequency < EPSILON
+            { 0. }
+        else if t > self.te
             { (-Sample::exp(-self.epsilon * (t - self.te)) + self.shift) / self.delta }
         else
             { self.e0 * Sample::exp(self.alpha * t) * Sample::sin(self.omega * t) }
     }
 
-    pub fn noise_modulator(&self, t: Sample) -> Sample {
+    fn noise_modulator(&self, t: Sample) -> (Sample, Sample) {
         let voiced = 0.1 + 0.2 * Sample::max(0., Sample::sin(2. * PI * t));
-        lerp(0.3, voiced, self.tenseness)
+        let fricative = lerp(0.3, voiced, self.tenseness);
+        let aspirate = fricative * (1. - Sample::sqrt(self.tenseness))
+            * (0.2 + 0.02 * self.noise1d(self.total_time * 1.99));
+        ( aspirate, fricative )
+    }
+
+    fn noise1d(&self, x: Sample) -> Sample {
+        let x: f64 = x.into();
+        self.simplex.get([x * 1.2, -x * 0.7]) as Sample
     }
 }
