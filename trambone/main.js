@@ -121,7 +121,9 @@ const AudioSystem =
                 type: "send-params",
                 frequency: Glottis.frequency,
                 tenseness: Glottis.tenseness,
-                pitchWobble: UI.wobbleButton.state
+                pitchWobble: UI.wobbleButton.state,
+                tongue: { index: 12.9, diameter: 2.43 },
+                constrictions: []
             });
     },
 

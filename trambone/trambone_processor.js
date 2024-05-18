@@ -166,11 +166,12 @@ export class Trambone {
         return Trambone.__wrap(ret);
     }
     /**
-    * @param {number} lambda
+    * @param {number} lambda0
+    * @param {number} lambda1
     * @returns {number}
     */
-    run_step(lambda) {
-        const ret = wasm.trambone_run_step(this.__wbg_ptr, lambda);
+    run_step(lambda0, lambda1) {
+        const ret = wasm.trambone_run_step(this.__wbg_ptr, lambda0, lambda1);
         return ret;
     }
     /**
@@ -195,6 +196,20 @@ export class Trambone {
     */
     set_pitch_wobble(wobble) {
         wasm.trambone_set_pitch_wobble(this.__wbg_ptr, wobble);
+    }
+    /**
+    * @param {number} index
+    * @param {number} diameter
+    */
+    set_tongue(index, diameter) {
+        wasm.trambone_add_constriction(this.__wbg_ptr, index, diameter);
+    }
+    /**
+    * @param {number} index
+    * @param {number} diameter
+    */
+    add_constriction(index, diameter) {
+        wasm.trambone_add_constriction(this.__wbg_ptr, index, diameter);
     }
 }
 

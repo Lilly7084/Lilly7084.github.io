@@ -28,7 +28,8 @@ fn lerp(a: Sample, b: Sample, fac: Sample) -> Sample {
 pub struct Trambone {
     noise_buf: Vec<Sample>,
     noise_idx: usize,
-    glottis: Glottis
+    glottis: Glottis,
+    tract: Tract
 }
 
 #[wasm_bindgen]
@@ -38,15 +39,18 @@ impl Trambone {
         Trambone {
             noise_buf: noise_buf,
             noise_idx: 0,
-            glottis: Glottis::new(sample_rate, 140., 0.6)
+            glottis: Glottis::new(sample_rate, 140., 0.6),
+            tract: Tract::new()
         }
     }
 
-    pub fn run_step(&mut self, lambda: Sample) -> Sample {
+    pub fn run_step(&mut self, lambda0: Sample, lambda1: Sample) -> Sample {
         let noise = self.noise_buf[self.noise_idx];
         self.noise_idx = (self.noise_idx + 1) % self.noise_buf.len();
-        let (vocal, fricative) = self.glottis.run_step(lambda, noise);
-        vocal
+        let (vocal, fricative) = self.glottis.run_step(lambda0, noise);
+        let filt0 = self.tract.run_step(lambda0, vocal, fricative);
+        let filt1 = self.tract.run_step(lambda1, vocal, fricative);
+        (filt0 + filt1) * 0.125
     }
 
     pub fn finish_block(&mut self) {
@@ -63,6 +67,14 @@ impl Trambone {
 
     pub fn set_pitch_wobble(&mut self, wobble: bool) {
         self.glottis.pitch_wobble = wobble;
+    }
+
+    pub fn set_tongue(&mut self, index: Sample, diameter: Sample) {
+        self.tract.set_tongue(index, diameter);
+    }
+
+    pub fn add_constriction(&mut self, index: Sample, diameter: Sample) {
+        self.tract.add_constriction(index, diameter);
     }
 }
 

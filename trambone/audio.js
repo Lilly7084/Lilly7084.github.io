@@ -61,7 +61,6 @@ class TramboneProcessor extends AudioWorkletProcessor
                 if (isNaN(synth)) {
                     console.error("STOP: Synthesizer produced NaN result!");
                     return false;
-                    // synth = -1;
                 }
                 out[j] = synth;
             }
