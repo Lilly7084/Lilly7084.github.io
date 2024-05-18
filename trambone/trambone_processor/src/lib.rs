@@ -68,7 +68,7 @@ impl Trambone {
 
 // ==================== Glottal source ====================
 
-pub struct Glottis {
+struct Glottis {
     simplex: Simplex,
     aspirate_filter: DirectForm2Transposed::<Sample>,
     fricative_filter: DirectForm2Transposed::<Sample>,
@@ -172,7 +172,7 @@ impl Glottis {
         self.old_frequency = self.new_frequency;
         self.new_frequency = self.target_frequency * (1. + freq_mod);
         self.old_tenseness = self.new_tenseness;
-        self.new_tenseness = clamp(self.target_tenseness + tense_mod, 0., 1.);
+        self.new_tenseness = clamp(self.target_tenseness + tense_mod, EPSILON, 1. - EPSILON);
     }
 
 
@@ -191,7 +191,7 @@ impl Glottis {
         let te = tp * (1. + rk);
 
         let epsilon = 1. / ta;
-        let shift = Sample::exp(-self.epsilon * (1. - te));
+        let shift = Sample::exp(-epsilon * (1. - te));
         let delta = 1. - shift;
 
         let rhs_int = ((1. / epsilon) * (shift - 1.) + (1. - te) * shift) / delta;
@@ -235,5 +235,109 @@ impl Glottis {
     fn noise1d(&self, x: Sample) -> Sample {
         let x: f64 = x.into();
         self.simplex.get([x * 1.2, -x * 0.7]) as Sample
+    }
+}
+
+// ==================== Tract model ====================
+
+struct Tract {
+    // Settings
+    glottal_reflection: Sample,
+    lip_reflection: Sample,
+    // Shape information
+    length: usize,
+    nose_length: usize,
+    blade_start: usize,
+    nose_start: usize,
+    tip_start: usize,
+    lip_start: usize,
+    // Throat waveguide
+    throat_diameter: Vec::<Sample>,
+    old_throat_reflection: Vec::<Sample>,
+    new_throat_reflection: Vec::<Sample>,
+    throat_left: Vec::<Sample>,
+    throat_right: Vec::<Sample>,
+    tmp_throat_left: Vec::<Sample>,
+    tmp_throat_right: Vec::<Sample>,
+    // Junction
+}
+
+impl Tract {
+    pub fn new() -> Tract {
+        let glottal_reflection = 0.75;
+        let lip_reflection = -0.85;
+        let length = 44;
+        let nose_length = 28;
+        let blade_start = 10;
+        let nose_start = length - nose_length;
+        let tip_start = 32;
+        let lip_start = 39;
+        let mut t = Tract {
+            glottal_reflection: glottal_reflection,
+            lip_reflection: lip_reflection,
+            length: length,
+            nose_length: nose_length,
+            blade_start: blade_start,
+            nose_start: nose_start,
+            tip_start: tip_start,
+            lip_start: lip_start,
+            throat_diameter: vec![1. as Sample; length],
+            old_throat_reflection: vec![0. as Sample; length + 1],
+            new_throat_reflection: vec![0. as Sample; length + 1],
+            throat_left: vec![0. as Sample; length],
+            throat_right: vec![0. as Sample; length],
+            tmp_throat_left: vec![0. as Sample; length],
+            tmp_throat_right: vec![0. as Sample; length]
+        };
+        t.calculate_reflections();
+        t
+    }
+
+    pub fn run_step(&mut self, lambda: Sample, vocal: Sample, fricative: Sample) -> Sample {
+        // Throat
+        for j in 1..self.length {
+            let r = lerp(self.old_throat_reflection[j], self.new_throat_reflection[j], lambda);
+            let w = r * (self.throat_right[j - 1] + self.throat_left[j]);
+            self.tmp_throat_left[j - 1] = self.throat_left[j] + w;
+            self.tmp_throat_right[j] = self.throat_right[j - 1] - w;
+        }
+        // Ends
+        self.tmp_throat_right[0] = self.throat_left[0] * self.glottal_reflection + vocal; // Glottis
+        self.tmp_throat_left[self.length - 1] = self.throat_right[self.length - 1] * self.lip_reflection; // Lips
+        // Push changes
+        for j in 0..self.length {
+            self.throat_left[j] = self.tmp_throat_left[j];
+            self.throat_right[j] = self.tmp_throat_right[j];
+        }
+        /*lips*/self.throat_right[self.length - 1]
+    }
+
+    pub fn finish_block(&mut self) {
+        self.reshape_tract();
+        self.calculate_reflections();
+    }
+
+    pub fn set_tongue(&mut self, index: Sample, diameter: Sample) {
+        // TODO: Implement
+    }
+
+    pub fn add_constriction(&mut self, index: Sample, diameter: Sample) {
+        // TODO: Implement
+    }
+
+    fn reshape_tract(&mut self) {
+        // TODO: Implement
+    }
+
+    fn calculate_reflections(&mut self) {
+        // Throat
+        for j in 1..self.length {
+            self.old_throat_reflection[j] = self.new_throat_reflection[j];
+            let a0 = self.throat_diameter[j - 1] * self.throat_diameter[j - 1];
+            let a1 = self.throat_diameter[j] * self.throat_diameter[j];
+            self.new_throat_reflection[j] =
+                if a0 < EPSILON { 0.999 }
+                else { (a0 - a1) / (a0 + a1) }
+        }
     }
 }

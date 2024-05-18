@@ -1,3 +1,4 @@
+import "./TextEncoder.js";
 import init, {Trambone} from "./trambone_processor.js";
 
 class TramboneProcessor extends AudioWorkletProcessor
@@ -35,19 +36,37 @@ class TramboneProcessor extends AudioWorkletProcessor
                 this.proc.set_frequency(event.frequency);
                 this.proc.set_tenseness(event.tenseness);
                 this.proc.set_pitch_wobble(event.pitchWobble);
+                this.proc.set_tongue(event.tongue.index, event.tongue.diameter);
+                for (const cons of event.constrictions)
+                    this.proc.add_constriction(cons.index, cons.diameter);
+                // Reshaping happens immediately when the params are sent,
+                // so we can send back the calculated tract shape now.
+                this.port.postMessage({
+                    type: "tract-shape",
+                    // TODO: Send tract shape info
+                })
                 break;
         }
     }
 
     process (_inputs, outputs, _params)
     {
-        const out = outputs[0][0]; // Attachment 0, channel 0 (TODO: Does this output left only?)
-        for (var j = 0; j < out.length; j++) {
-            const lambda0 = j / out.length;
-            // TODO: Tract needs to be clocked twice as fast as glottis
-            out[j] = this.proc.run_step(lambda0);
+        // Only process the audio if the synth has already been loaded!
+        if (this.proc) {
+            const out = outputs[0][0];
+            for (var j = 0; j < out.length; j++) {
+                const lambda0 = j / out.length;
+                const lambda1 = (j + 0.5) / out.length;
+                var synth = this.proc.run_step(lambda0, lambda1);
+                if (isNaN(synth)) {
+                    console.error("STOP: Synthesizer produced NaN result!");
+                    return false;
+                    // synth = -1;
+                }
+                out[j] = synth;
+            }
+            this.proc.finish_block();
         }
-        this.proc.finish_block();
         return true;
     }
 }
