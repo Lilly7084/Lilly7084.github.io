@@ -26,7 +26,14 @@ class TramboneProcessor extends AudioWorkletProcessor
                 var noiseBuf = [];
                 for (var j = 0; j < event.sampleRate; j++)
                     noiseBuf.push(Math.random());
-                this.proc = Trambone.new(event.sampleRate, noiseBuf);
+                this.proc = Trambone.new(event.sampleRate, noiseBuf,
+                    event.length,
+                    event.noseLength,
+                    event.bladeStart,
+                    event.noseStart,
+                    event.tipStart,
+                    event.lipStart
+                );
                 this.port.postMessage({
                     type: "ready"
                 });
@@ -43,7 +50,7 @@ class TramboneProcessor extends AudioWorkletProcessor
                 // so we can send back the calculated tract shape now.
                 this.port.postMessage({
                     type: "tract-shape",
-                    // TODO: Send tract shape info
+                    throat: this.proc.get_throat_diameters()
                 })
                 break;
         }

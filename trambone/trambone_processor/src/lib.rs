@@ -34,13 +34,13 @@ pub struct Trambone {
 
 #[wasm_bindgen]
 impl Trambone {
-    pub fn new(sample_rate: Sample, noise_buf: Vec<Sample>) -> Trambone {
+    pub fn new(sample_rate: Sample, noise_buf: Vec<Sample>, length: usize, nose_length: usize, blade_start: usize, nose_start: usize, tip_start: usize, lip_start: usize) -> Trambone {
         console_error_panic_hook::set_once();
         Trambone {
             noise_buf: noise_buf,
             noise_idx: 0,
             glottis: Glottis::new(sample_rate, 140., 0.6),
-            tract: Tract::new()
+            tract: Tract::new(length, nose_length, blade_start, nose_start, tip_start, lip_start)
         }
     }
 
@@ -56,6 +56,8 @@ impl Trambone {
     pub fn finish_block(&mut self) {
         self.glottis.finish_block()
     }
+
+    // Getters and setters to interface with javascript side
 
     pub fn set_frequency(&mut self, frequency: Sample) {
         self.glottis.target_frequency = frequency;
@@ -75,6 +77,10 @@ impl Trambone {
 
     pub fn add_constriction(&mut self, index: Sample, diameter: Sample) {
         self.tract.add_constriction(index, diameter);
+    }
+
+    pub fn get_throat_diameters(&self) -> Vec::<Sample> {
+        self.tract.throat.diameter.clone()
     }
 }
 
@@ -269,15 +275,9 @@ struct Tract {
 }
 
 impl Tract {
-    pub fn new() -> Tract {
+    pub fn new(length: usize, nose_length: usize, blade_start: usize, nose_start: usize, tip_start: usize, lip_start: usize) -> Tract {
         let glottal_reflection = 0.75;
         let lip_reflection = -0.85;
-        let length = 44;
-        let nose_length = 28;
-        let blade_start = 10;
-        let nose_start = length - nose_length;
-        let tip_start = 32;
-        let lip_start = 39;
         let mut t = Tract {
             glottal_reflection: glottal_reflection,
             lip_reflection: lip_reflection,
@@ -309,7 +309,7 @@ impl Tract {
     }
 
     pub fn finish_block(&mut self) {
-        self.throat.reshape(&self.throat_diameter, 0.); // TODO provide actual delta_time value
+        // self.throat.reshape(&self.throat_diameter, 0.); // TODO provide actual delta_time value
         self.calculate_reflections();
     }
 
@@ -360,7 +360,7 @@ impl WaveguideChannel {
     pub fn new(n: usize, shape_init: fn(usize)->Sample) -> WaveguideChannel {
         let mut w = WaveguideChannel {
             n: n,
-            diameter: vec![1. as Sample; n],
+            diameter: vec![0. as Sample; n],
             old_reflection: vec![0. as Sample; n-1],
             new_reflection: vec![0. as Sample; n-1],
             flow_left: vec![0. as Sample; n],
@@ -368,6 +368,9 @@ impl WaveguideChannel {
             tmp_flow_left: vec![0. as Sample; n],
             tmp_flow_right: vec![0. as Sample; n]
         };
+        for j in 0..n {
+            w.diameter[j] = shape_init(j);
+        }
         w.calculate_reflections();
         w
     }

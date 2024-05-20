@@ -94,7 +94,6 @@ const AudioSystem =
             type: "send-wasm",
             wasmBytes
         });
-        // TODO: Send the call to initialize the module
     },
 
     onProcMessage: function (data)
@@ -103,14 +102,24 @@ const AudioSystem =
             // WASM module has been loaded. Now to instantiate the synth.
             this.proc.port.postMessage({
                 type: "init",
-                sampleRate: this.ctx.sampleRate
+                sampleRate: this.ctx.sampleRate,
+                length: Tract.length,
+                noseLength: Tract.noseLength,
+                bladeStart: Tract.bladeStart,
+                noseStart: Tract.noseStart,
+                tipStart: Tract.tipStart,
+                lipStart: Tract.lipStart
             });
         }
         else if (data.type == "ready") {
             // Synth is ready, so patch it in!
-            console.log("Audio synthesizer initialized.");
             this.unmute();
             this.ready = true;
+        }
+        else if (data.type == "tract-shape") {
+            // Synth is sending back the computed tract shape
+            Tract.throatDiameters = data.throat;
+            Tract.hasDiameters = true;
         }
     },
 
@@ -303,6 +312,96 @@ const Glottis =
     }
 };
 
+const Tract =
+{
+    hasDiameters: false,
+    throatDiameters: [],
+
+    strokeColor: DARK_PINK,
+    fillColor: "pink",
+
+    originX: 340,
+    originY: 449,
+    angleScale: 0.64,
+    angleOffset: -0.24,
+    radiusScale: 60,
+    radiusOffset: 298,
+
+    length: 44,
+    noseLength: 28,
+    bladeStart: 10,
+    noseStart: 16,
+    tipStart: 32,
+    lipStart: 39,
+
+    init: function ()
+    {},
+
+    draw: function (ctx)
+    {
+        if (this.hasDiameters)
+            this.drawTract(ctx);
+    },
+
+    handleTouches: function (touches)
+    {},
+
+    handleTouchStart: function (touch)
+    {},
+
+
+    drawTract: function (ctx)
+    {
+        ctx.globalAlpha = 1;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        // Throat fill
+        ctx.beginPath();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = this.fillColor;
+        ctx.fillStyle = this.fillColor;
+        this.moveTo(ctx, 1, 0);
+        for (var j = 1; j < this.length; j++)
+            this.lineTo(ctx, j, this.throatDiameters[j]);
+        for (var j = this.length-1; j >= 2; j--)
+            this.lineTo(ctx, j, 0);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fill();
+
+        // Throat stroke
+        ctx.beginPath();
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = this.strokeColor;
+        this.moveTo(ctx, 1, this.throatDiameters[0]);
+        for (var j = 2; j < this.length; j++)
+            this.lineTo(ctx, j, this.throatDiameters[j]);
+        this.moveTo(ctx, 1, 0);
+        for (var j = 2; j < this.length; j++) // TODO split at velum
+            this.lineTo(ctx, j, 0);
+        ctx.stroke();
+    },
+
+    moveTo: function (ctx, index, diameter)
+    {
+        const angle = this.angleOffset + this.angleScale * index * Math.PI / (this.lipStart - 1);
+        const radius = this.radiusOffset - this.radiusScale * diameter;
+        const x = this.originX - radius * Math.cos(angle);
+        const y = this.originY - radius * Math.sin(angle);
+        ctx.moveTo(x, y);
+    },
+
+    lineTo: function (ctx, index, diameter)
+    {
+        const angle = this.angleOffset + this.angleScale * index * Math.PI / (this.lipStart - 1);
+        const radius = this.radiusOffset - this.radiusScale * diameter;
+        const x = this.originX - radius * Math.cos(angle);
+        const y = this.originY - radius * Math.sin(angle);
+        ctx.lineTo(x, y);
+    }
+};
+
 const UI =
 {
     inTitleScreen: true,
@@ -315,6 +414,7 @@ const UI =
         this.wobbleButton = new Button(460, 464, 140, 30, "pitch wobble", true);
         // Subsystems
         Glottis.init();
+        Tract.init();
     },
 
     draw: function (ctx)
@@ -326,6 +426,7 @@ const UI =
         this.wobbleButton.draw(ctx);
         // Subsystems
         Glottis.draw(ctx);
+        Tract.draw(ctx);
         // Overlay screens
         if (this.inTitleScreen)
             this.drawTitleScreen(ctx);
@@ -340,6 +441,7 @@ const UI =
             return;
         // Subsystems
         Glottis.handleTouches(touches);
+        Tract.handleTouches(touches);
     },
 
     handleTouchStart: function (touch)
@@ -361,6 +463,7 @@ const UI =
         this.wobbleButton.handleTouchStart(touch);
         // Subsystems
         Glottis.handleTouchStart(touch);
+        Tract.handleTouchStart(touch);
     },
 
 

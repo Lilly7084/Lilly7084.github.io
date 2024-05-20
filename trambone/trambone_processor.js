@@ -56,6 +56,20 @@ function passArrayF32ToWasm0(arg, malloc) {
     return ptr;
 }
 
+let cachedInt32Memory0 = null;
+
+function getInt32Memory0() {
+    if (cachedInt32Memory0 === null || cachedInt32Memory0.byteLength === 0) {
+        cachedInt32Memory0 = new Int32Array(wasm.memory.buffer);
+    }
+    return cachedInt32Memory0;
+}
+
+function getArrayF32FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getFloat32Memory0().subarray(ptr / 4, ptr / 4 + len);
+}
+
 function addHeapObject(obj) {
     if (heap_next === heap.length) heap.push(heap.length + 1);
     const idx = heap_next;
@@ -119,15 +133,6 @@ function passStringToWasm0(arg, malloc, realloc) {
     return ptr;
 }
 
-let cachedInt32Memory0 = null;
-
-function getInt32Memory0() {
-    if (cachedInt32Memory0 === null || cachedInt32Memory0.byteLength === 0) {
-        cachedInt32Memory0 = new Int32Array(wasm.memory.buffer);
-    }
-    return cachedInt32Memory0;
-}
-
 const TramboneFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_trambone_free(ptr >>> 0));
@@ -157,12 +162,18 @@ export class Trambone {
     /**
     * @param {number} sample_rate
     * @param {Float32Array} noise_buf
+    * @param {number} length
+    * @param {number} nose_length
+    * @param {number} blade_start
+    * @param {number} nose_start
+    * @param {number} tip_start
+    * @param {number} lip_start
     * @returns {Trambone}
     */
-    static new(sample_rate, noise_buf) {
+    static new(sample_rate, noise_buf, length, nose_length, blade_start, nose_start, tip_start, lip_start) {
         const ptr0 = passArrayF32ToWasm0(noise_buf, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.trambone_new(sample_rate, ptr0, len0);
+        const ret = wasm.trambone_new(sample_rate, ptr0, len0, length, nose_length, blade_start, nose_start, tip_start, lip_start);
         return Trambone.__wrap(ret);
     }
     /**
@@ -210,6 +221,22 @@ export class Trambone {
     */
     add_constriction(index, diameter) {
         wasm.trambone_add_constriction(this.__wbg_ptr, index, diameter);
+    }
+    /**
+    * @returns {Float32Array}
+    */
+    get_throat_diameters() {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.trambone_get_throat_diameters(retptr, this.__wbg_ptr);
+            var r0 = getInt32Memory0()[retptr / 4 + 0];
+            var r1 = getInt32Memory0()[retptr / 4 + 1];
+            var v1 = getArrayF32FromWasm0(r0, r1).slice();
+            wasm.__wbindgen_free(r0, r1 * 4, 4);
+            return v1;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
     }
 }
 
