@@ -263,15 +263,9 @@ struct Tract {
     nose_start: usize,
     tip_start: usize,
     lip_start: usize,
-    // Throat waveguide
+    // Waveguide data
     throat_diameter: Vec::<Sample>,
-    old_throat_reflection: Vec::<Sample>,
-    new_throat_reflection: Vec::<Sample>,
-    throat_left: Vec::<Sample>,
-    throat_right: Vec::<Sample>,
-    tmp_throat_left: Vec::<Sample>,
-    tmp_throat_right: Vec::<Sample>,
-    // Junction
+    throat: WaveguideChannel
 }
 
 impl Tract {
@@ -294,38 +288,28 @@ impl Tract {
             tip_start: tip_start,
             lip_start: lip_start,
             throat_diameter: vec![1. as Sample; length],
-            old_throat_reflection: vec![0. as Sample; length + 1],
-            new_throat_reflection: vec![0. as Sample; length + 1],
-            throat_left: vec![0. as Sample; length],
-            throat_right: vec![0. as Sample; length],
-            tmp_throat_left: vec![0. as Sample; length],
-            tmp_throat_right: vec![0. as Sample; length]
+            throat: WaveguideChannel::new(length, |j| {
+                if j < 7 { 0.6 }
+                else if j < 12 { 1.1 }
+                else { 1.5 }
+            })
         };
         t.calculate_reflections();
         t
     }
 
     pub fn run_step(&mut self, lambda: Sample, vocal: Sample, fricative: Sample) -> Sample {
-        // Throat
-        for j in 1..self.length {
-            let r = lerp(self.old_throat_reflection[j], self.new_throat_reflection[j], lambda);
-            let w = r * (self.throat_right[j - 1] + self.throat_left[j]);
-            self.tmp_throat_left[j - 1] = self.throat_left[j] + w;
-            self.tmp_throat_right[j] = self.throat_right[j - 1] - w;
-        }
-        // Ends
-        self.tmp_throat_right[0] = self.throat_left[0] * self.glottal_reflection + vocal; // Glottis
-        self.tmp_throat_left[self.length - 1] = self.throat_right[self.length - 1] * self.lip_reflection; // Lips
-        // Push changes
-        for j in 0..self.length {
-            self.throat_left[j] = self.tmp_throat_left[j];
-            self.throat_right[j] = self.tmp_throat_right[j];
-        }
-        /*lips*/self.throat_right[self.length - 1]
+        self.throat.propagate(lambda);
+        self.throat.left().propagate(self.glottal_reflection);
+        self.throat.right().propagate(self.lip_reflection);
+        self.throat.left().feed(vocal);
+        // Write back
+        self.throat.commit();
+        self.throat.flow_right[self.throat.n-1] //lips
     }
 
     pub fn finish_block(&mut self) {
-        self.reshape_tract();
+        self.throat.reshape(&self.throat_diameter, 0.); // TODO provide actual delta_time value
         self.calculate_reflections();
     }
 
@@ -337,19 +321,105 @@ impl Tract {
         // TODO: Implement
     }
 
-    fn reshape_tract(&mut self) {
+    fn calculate_reflections(&mut self) {
+        self.throat.calculate_reflections();
+    }
+}
+
+// ==================== Digital waveguide model ====================
+
+struct WaveguidePort<'a> {
+    flow_in: &'a Sample,
+    flow_out: &'a mut Sample,
+    diameter: &'a Sample
+}
+
+impl WaveguidePort<'_> {
+    pub fn propagate(&mut self, reflection: Sample) -> Sample {
+        *self.flow_out = *self.flow_in * reflection;
+        *self.flow_in
+    }
+
+    pub fn feed(&mut self, flow: Sample) {
+        *self.flow_out += flow;
+    }
+}
+
+struct WaveguideChannel {
+    n: usize,
+    diameter: Vec::<Sample>,
+    old_reflection: Vec::<Sample>,
+    new_reflection: Vec::<Sample>,
+    flow_left: Vec::<Sample>,
+    flow_right: Vec::<Sample>,
+    tmp_flow_left: Vec::<Sample>,
+    tmp_flow_right: Vec::<Sample>
+}
+
+impl WaveguideChannel {
+    pub fn new(n: usize, shape_init: fn(usize)->Sample) -> WaveguideChannel {
+        let mut w = WaveguideChannel {
+            n: n,
+            diameter: vec![1. as Sample; n],
+            old_reflection: vec![0. as Sample; n-1],
+            new_reflection: vec![0. as Sample; n-1],
+            flow_left: vec![0. as Sample; n],
+            flow_right: vec![0. as Sample; n],
+            tmp_flow_left: vec![0. as Sample; n],
+            tmp_flow_right: vec![0. as Sample; n]
+        };
+        w.calculate_reflections();
+        w
+    }
+
+    pub fn propagate(&mut self, lambda: Sample) {
+        for j in 0..self.n-1 {
+            let in_left = self.flow_left[j+1];
+            let in_right = self.flow_right[j];
+            let r = lerp(self.old_reflection[j], self.new_reflection[j], lambda);
+            let w = r * (in_right + in_left);
+            self.tmp_flow_left[j] = in_left + w;
+            self.tmp_flow_right[j+1] = in_right - w;
+        }
+    }
+
+    pub fn commit(&mut self) {
+        for j in 0..self.n {
+            self.flow_left[j] = self.tmp_flow_left[j];
+            self.flow_right[j] = self.tmp_flow_right[j];
+        }
+    }
+
+    pub fn reshape(&mut self, target: &Vec::<Sample>, delta_time: Sample) {
         // TODO: Implement
+        self.calculate_reflections();
+    }
+
+    pub fn left(&mut self) -> WaveguidePort {
+        WaveguidePort {
+            flow_in: &self.flow_left[0],
+            flow_out: &mut self.tmp_flow_right[0],
+            diameter: &self.diameter[0]
+        }
+    }
+
+    pub fn right(&mut self) -> WaveguidePort {
+        WaveguidePort {
+            flow_in: &self.flow_right[self.n-1],
+            flow_out: &mut self.tmp_flow_left[self.n-1],
+            diameter: &self.diameter[self.n-1]
+        }
     }
 
     fn calculate_reflections(&mut self) {
-        // Throat
-        for j in 1..self.length {
-            self.old_throat_reflection[j] = self.new_throat_reflection[j];
-            let a0 = self.throat_diameter[j - 1] * self.throat_diameter[j - 1];
-            let a1 = self.throat_diameter[j] * self.throat_diameter[j];
-            self.new_throat_reflection[j] =
-                if a0 < EPSILON { 0.999 }
-                else { (a0 - a1) / (a0 + a1) }
+        let mut prev_area: Sample = self.diameter[0] * self.diameter[0];
+        for j in 0..self.n-1 {
+            let area = self.diameter[j+1] * self.diameter[j+1];
+            self.old_reflection[j] = self.new_reflection[j];
+            self.new_reflection[j] =
+                if prev_area < EPSILON { 0.999 }
+                else { (prev_area - area) / (prev_area + area) };
+            prev_area = area;
         }
     }
 }
