@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>New page style test</title>
+
+        <link rel="stylesheet" type="text/css" href="style.css">
+        <script src="https://cdn.jsdelivr.net/npm/showdown@2.1.0/dist/showdown.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/highlight.min.js"></script>
+    </head>
+    <body>
+        <div id="header" class="grainy-background">
+            <p>This header intentionally left blank.</p>
+        </div>
+        <div id="outer">
+            <div id="header-dummy"></div>
+            <div id="content" class="grainy-background"></div>
+            <div id="footer" class="grainy-background">
+                <p>This footer intentionally left blank.</p>
+            </div>
+        </div>
+
+        <script>
+            /*
+             * I reeeally wanted to avoid using any type of runtime scripting for the layout, but oh well.
+             * Need to measure how tall #header ends up being, and resize #header-dummy to match it.
+             */
+            window.onload = () => {
+                document.getElementById("header-dummy").style.height =
+                    document.getElementById("header").clientHeight + "px";
+            };
+
+            fetch("test.md")
+                .then((response) => response.text())
+                .then((response) => {
+                    // TODO: Typographic replacements (R/C/TM signs, plus/minus, dashes)
+
+                    const md = new showdown.Converter({
+                        // backslashEscapesHTMLTags
+                        completeHTMLDocument: false,
+                        // customizedHeaderId
+                        disableForced4SpacesIndentedSublists: true,
+                        ellipsis: false,
+                        // emoji
+                        // encodeEmails
+                        // ghCodeBlocks
+                        // ghCompatibleHeaderId
+                        // ghMentions
+                        // ghMentionsLink
+                        // headerLevelStart
+                        literalMidWordUnderscores: true,
+                        metadata: true,
+                        // moreStyling
+                        noHeaderId: true,
+                        omitExtraWLInCodeBlocks: true,
+                        openLinksInNewWindow: true,
+                        // parseImgDimensions
+                        // prefixHeaderId
+                        // rawHeaderId
+                        // rawPrefixHeaderId
+                        requireSpaceBeforeHeadingText: true,
+                        simpleLineBreaks: false,
+                        simplifiedAutoLink: true,
+                        // smartIndentationFix
+                        // smoothLivePreview
+                        splitAdjacentBlockquotes: true,
+                        strikethrough: true,
+                        tables: true,
+                        // tablesHeaderId
+                        // tasklists
+                        underline: true,
+                    });
+                    const html = md.makeHtml(response);
+                    // TODO: Should probably sanitize the DOM for peace of mind
+                    document.getElementById("content").innerHTML = html;
+
+                    hljs.highlightAll();
+                });
+
+        </script>
+    </body>
+</html>
