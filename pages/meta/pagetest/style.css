@@ -14,7 +14,7 @@
     -webkit-box-sizing: border-box;
 
     font-family: "Ubuntu Condensed";
-    font-size: x-large;
+    font-size: large;
 }
 
 .grainy-background {
@@ -42,6 +42,7 @@ body {
     --header-background: rgba(240, 240, 240, 0.9);
     --header-underline: black;
     --content-background: rgba(255, 255, 255, 0.225);
+    --corner-radius: 8px;
 }
 
 #header {
@@ -72,7 +73,7 @@ body {
     width: 75%;
     height: fit-content;
     margin: 25px auto;
-    border-radius: 12px;
+    border-radius: var(--corner-radius);
     padding: 12px;
     background-color: var(--content-background);
     backdrop-filter: blur(10px);
@@ -105,15 +106,13 @@ h1, h2, h3 {
 blockquote {
     margin: 0;
     border: 2px solid black;
-    border-radius: 12px;
-    padding: 12px;
+    border-radius: var(--corner-radius);
+    padding: 6px;
 }
-
-
 
 p code, pre {
     border: 1px solid black;
-    border-radius: 12px;
+    border-radius: var(--corner-radius);
     padding: 3px 6px;
     background: rgba(200, 200, 200, 0.5);
 }
@@ -122,6 +121,31 @@ code, code * {
     font-family: "Ubuntu Mono";
     /* font-size: 1em; */
 }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  /* border-collapse: separate;
+  border-spacing: 0; */
+  border: 1px solid black;
+  /* border-radius: var(--corner-radius); */
+}
+
+th, td {
+  border: 1px solid black;
+  /* border-left: 1px solid black;
+  border-top: 1px solid black; */
+  padding: 3px 6px;
+}
+
+th {
+  background-color: rgba(114, 159, 207, 0.75);
+  /* border-top: none; */
+}
+
+/* td:first-child, th:first-child {
+  border-left: none;
+} */
 
 /*!
   Theme: GitHub

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>New page style test</title>
+
+        <link rel="stylesheet" type="text/css" href="style.css">
+        <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.3.0/dist/markdown-it.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/markdown-it-footnote@4.0.0/dist/markdown-it-footnote.min.js"></script>
+        <!-- <script src="https://cdn.jsdelivr.net/npm/markdown-it-highlightjs@4.3.0/dist/core.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/markdown-it-highlightjs@4.3.0/dist/index.js"></script> -->
+        <!-- <script src="https://cdn.jsdelivr.net/npm/showdown@2.1.0/dist/showdown.min.js"></script> -->
+        <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/highlight.min.js"></script>
+    </head>
+    <body>
+        <div id="header" class="grainy-background">
+            <p>This header intentionally left blank.</p>
+        </div>
+        <div id="outer">
+            <div id="header-dummy"></div>
+            <div id="content" class="grainy-background"></div>
+            <div id="footer" class="grainy-background">
+                <p>This footer intentionally left blank.</p>
+            </div>
+        </div>
+
+        <script>
+            /*
+             * I reeeally wanted to avoid using any type of runtime scripting for the layout, but oh well.
+             * Need to measure how tall #header ends up being, and resize #header-dummy to match it.
+             */
+            window.onload = () => {
+                document.getElementById("header-dummy").style.height =
+                    document.getElementById("header").clientHeight + "px";
+            };
+
+            fetch("test.md")
+                .then((response) => response.text())
+                .then((response) => {
+                    // TODO: Typographic replacements (R/C/TM signs, plus/minus, dashes)
+
+                    // const md = new showdown.Converter({
+                    //     // backslashEscapesHTMLTags
+                    //     completeHTMLDocument: false,
+                    //     // customizedHeaderId
+                    //     disableForced4SpacesIndentedSublists: true,
+                    //     ellipsis: false,
+                    //     // emoji
+                    //     // encodeEmails
+                    //     // ghCodeBlocks
+                    //     // ghCompatibleHeaderId
+                    //     // ghMentions
+                    //     // ghMentionsLink
+                    //     // headerLevelStart
+                    //     literalMidWordUnderscores: true,
+                    //     metadata: true,
+                    //     // moreStyling
+                    //     noHeaderId: true,
+                    //     omitExtraWLInCodeBlocks: true,
+                    //     openLinksInNewWindow: true,
+                    //     // parseImgDimensions
+                    //     // prefixHeaderId
+                    //     // rawHeaderId
+                    //     // rawPrefixHeaderId
+                    //     requireSpaceBeforeHeadingText: true,
+                    //     simpleLineBreaks: false,
+                    //     simplifiedAutoLink: true,
+                    //     // smartIndentationFix
+                    //     // smoothLivePreview
+                    //     splitAdjacentBlockquotes: true,
+                    //     strikethrough: true,
+                    //     tables: true,
+                    //     // tablesHeaderId
+                    //     // tasklists
+                    //     underline: true,
+                    // });
+                    // const html = md.makeHtml(response);
+
+                    const md = markdownit({
+                        // Enable HTML tags in source
+                        html: false,
+
+                        // Use '/' to close single tags (<br />).
+                        // This is only for full CommonMark compatibility.
+                        xhtmlOut: false,
+
+                        // Convert '\n' in paragraphs into <br>
+                        breaks: false,
+
+                        // CSS language prefix for fenced blocks. Can be
+                        // useful for external highlighters.
+                        langPrefix: 'language-',
+
+                        // Autoconvert URL-like text to links
+                        linkify: false,
+
+                        // Enable some language-neutral replacement + quotes beautification
+                        // For the full list of replacements, see https://github.com/markdown-it/markdown-it/blob/master/lib/rules_core/replacements.mjs
+                        typographer: true,
+
+                        // Double + single quotes replacement pairs, when typographer enabled,
+                        // and smartquotes on. Could be either a String or an Array.
+                        //
+                        // For example, you can use '«»„“' for Russian, '„“‚‘' for German,
+                        // and ['«\xA0', '\xA0»', '‹\xA0', '\xA0›'] for French (including nbsp).
+                        quotes: '“”‘’',
+                    }).use(markdownitFootnote);
+                    const html = md.render(response);
+
+                    // TODO: Should probably sanitize the DOM for peace of mind
+                    document.getElementById("content").innerHTML = html;
+
+                    hljs.highlightAll();
+                });
+
+        </script>
+    </body>
+</html>
