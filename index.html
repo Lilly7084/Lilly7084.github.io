@@ -3,26 +3,147 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Lilly7084's website</title>
+        <title>New page style test</title>
 
-        <style>
-            * {
-                box-sizing: border-box;
-                -moz-box-sizing: border-box;
-                -webkit-box-sizing: border-box;
-            }
-        </style>
+        <link rel="stylesheet" type="text/css" href="style.css">
+        <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.3.0/dist/markdown-it.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/markdown-it-footnote@4.0.0/dist/markdown-it-footnote.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/highlight.min.js"></script>
     </head>
     <body>
-        <h2>Lilly7084's website</h2>
-        <p><em>Sorry for the very unpolished web1.0 layout, I intend to redo the entire navigator later :&gt;</em></p>
+        <div id="header" class="glass-background">
+            <p>This header intentionally left blank.</p>
+        </div>
+        <div id="outer">
+            <div id="header-dummy"></div>
+            <div id="content-frame" class="glass-background">
+                <div id="content"></div>
+            </div>
+            <div id="footer" class="glass-background">
+                <p>This footer intentionally left blank.</p>
+            </div>
+        </div>
 
-        <p>Pages on this site:</p>
-        <ul>
-            <li><a href="/pages/software/ieee_converter">IEEE-754 (double-precision) converter</a> - Created 10 Nov 2023, updated 10 Nov 2023</li>
-            <li><a href="/pages/meta/pagetest">Playground for other page styles</a> - Created 16 Sep 2025, updated 18 Jul 2026</li>
-        </ul>
+        <script>
+            const $ = (sel) => document.querySelector(sel);
 
-        <p>Last updated on 18 Jul 2026</p>
+            // Recreates all <script> nodes to make them executable
+            const refresh_scripts = function (node)
+            {
+                if (node.tagName === "SCRIPT") {
+                    // Make a copy of the element which will be executable
+                    const clone = document.createElement("script");
+                    clone.text = node.innerHTML;  // Code
+                    // Attributes
+                    for (const attr of node.attributes) {
+                        clone.setAttribute(attr.name, attr.value);
+                    }
+                    // <insert Indiana Jones gif>
+                    node.parentNode.replaceChild(clone, node);
+                    return;
+                }
+                // Not a script; recursively search its children for other scripts
+                for (const child of node.children) {
+                    refresh_scripts(child);
+                }
+            }
+
+            const nav_button_hook = function (hash)
+            {
+                // Well that works, sure
+                window.location.hash = hash;
+                window.location.reload();
+            }
+
+            // Sticks a listener onto navigation buttons
+            const hook_nav_buttons = function (node)
+            {
+                if (node.tagName === "A") {
+                    const url = URL.parse(node.href);
+                    if (url.origin === window.location.origin && url.hash) {
+                        node.addEventListener("click", () => nav_button_hook(url.hash));
+                    }
+                    return;
+                }
+                for (const child of node.children) {
+                    hook_nav_buttons(child);
+                }
+            }
+
+            const load_page_md = function (content)
+            {
+                const barrier = "--------------------";
+                if (content.startsWith(barrier)) {
+                    content = content.substring(barrier.length);
+                    const slice = content.indexOf(barrier);
+                    const header = content.substring(0, slice).trim();
+                    content = content.substring(slice + barrier.length);
+                    console.log("PAGE HEADER (TODO)\n" + header);
+                }
+                content = content.trim();
+
+                const renderer = markdownit({
+                    // Enable HTML tags in source
+                    html: true,
+                    // Use '/' to close single tags (<br />).
+                    // This is only for full CommonMark compatibility.
+                    xhtmlOut: true,
+                    // Convert '\n' in paragraphs into <br>
+                    breaks: false,
+                    // CSS language prefix for fenced blocks. Can be
+                    // useful for external highlighters.
+                    langPrefix: 'language-',
+                    // Autoconvert URL-like text to links
+                    linkify: false,
+                    // Enable some language-neutral replacement + quotes beautification
+                    // For the full list of replacements, see https://github.com/markdown-it/markdown-it/blob/master/lib/rules_core/replacements.mjs
+                    typographer: true,
+                    // Double + single quotes replacement pairs, when typographer enabled,
+                    // and smartquotes on. Could be either a String or an Array.
+                    //
+                    // For example, you can use '«»„“' for Russian, '„“‚‘' for German,
+                    // and ['«\xA0', '\xA0»', '‹\xA0', '\xA0›'] for French (including nbsp).
+                    quotes: '“”‘’',
+                });
+
+                // TODO: Should probably sanitize the DOM for peace of mind
+                const html = renderer.render(content);
+                $("#content").innerHTML = html;
+                hljs.highlightAll();
+                refresh_scripts($("#content"));
+                hook_nav_buttons($("#content"));
+            }
+
+            const main = async function ()
+            {
+                // I really wanted to avoid using any type of runtime scripting
+                // for the layout, but oh well. Need to measure how tall #header
+                // ends up being, and resize #header-dummy to match it.
+                $("#header-dummy").style.height = $("#header").clientHeight + "px";
+
+                let id = window.location.hash.substring(1).replace(".", "/");
+                if (!id) id = "navigator";
+
+                // I built in all this flexibility for other page formats
+                // and then never used it
+                const paths_to_try = {
+                    [`pages/${id}.md`]: load_page_md,
+                    [`pages/${id}/index.md`]: load_page_md,
+                }
+
+                let loaded = false;
+                for (const [path, loader] of Object.entries(paths_to_try)) {
+                    const response = await fetch(path);
+                    if (!response.ok) continue;
+                    const content = await response.text();
+                    console.log("Successfully loaded:", path);
+                    loader(content);
+                    return;
+                }
+                alert(`Failed to load page '${id}'`);
+            }
+
+            window.addEventListener("load", main);
+        </script>
     </body>
 </html>
