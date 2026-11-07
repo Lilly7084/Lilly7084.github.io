@@ -1,13 +1,25 @@
-<script src="/loader.js"></script>
+<!DOCTYPE html><script src="/static/loader.js"></script>
+
+----------
+Title: IEEE-754 floating-point converter
+LastUpdated: Saturday, 07 November 2026
+----------
 
 # IEEE-754 floating-point converter
 
-| Format        | Value                                                       |
-|:--------------|:------------------------------------------------------------|
-| Decimal       | <input id="val_dec" type="text" onchange="changed_dec()" /> |
-| float64 (Hex) | <input id="val_hex" type="text" onchange="changed_hex()" /> |
+I made this tool to convert floating-point numbers between decimal and their
+underlying hex representation. There was already a tool for that
+[here](https://www.h-schmidt.net/FloatConverter/IEEE754.html), but that only
+works for single-precision (32 bit) floats, and I needed double-precision (64
+bit) floats instead. It's a simple enough program so I went ahead and just made
+it... well over a year ago. Then in 2026 I came back and rewrote it to clean up
+the code and to make it handle single-precision floats at the same time.
 
-<!-- All this crap can be a footer so as to not mess with the layout -->
+| Format        | Value                                                          |
+|:--------------|:---------------------------------------------------------------|
+| Decimal       | <input id="decimal" type="text" onchange="changedDecimal()" /> |
+| float32 (Hex) | <input id="float32" type="text" onchange="changedFloat32()" /> |
+| float64 (Hex) | <input id="float64" type="text" onchange="changedFloat64()" /> |
 
 <style>
     td input {
@@ -15,35 +27,60 @@
     }
 </style>
 
-<script class="foo">
-    const RE_HEX = new RegExp("[^0-9a-f]");
-    const RE_DEC = new RegExp("[^0-9]");
+<script>
+    const buffer = new DataView(new ArrayBuffer(8));
 
-    var buffer = new ArrayBuffer(8);
-    var view = new DataView(buffer);
+    const S = (sel) => document.querySelector(sel);
 
-    function show_result() {
-        document.querySelector("#val_hex").value = "0x" + view.getBigUint64(0, true).toString(16).padStart(16, "0");
-        document.querySelector("#val_dec").value = view.getFloat64(0, true).toString();
+    function floatToBits32 (x) {
+        buffer.setFloat32(0, x, true);
+        return buffer.getUint32(0, true);
     }
 
-    function changed_hex() {
-        var as_str = document.querySelector("#val_hex").value.toLowerCase();
-        if (as_str.startsWith("0x"))
-            as_str = as_str.slice(2);
-        const as_number = BigInt(parseInt(as_str, 16));
-        // console.debug("Hexadecimal value changed!", as_str, as_number);
-        view.setBigUint64(0, as_number, true);
-        show_result();
+    function bitsToFloat32 (x) {
+        buffer.setUint32(0, x, true);
+        return buffer.getFloat32(0, true);
     }
 
-    function changed_dec() {
-        const as_str = document.querySelector("#val_dec").value.toLowerCase();
-        const as_number = parseFloat(as_str);
-        // console.debug("Decimal value changed!");
-        view.setFloat64(0, as_number, true);
-        show_result();
+    function floatToBits64 (x) {
+        buffer.setFloat64(0, x, true);
+        return buffer.getBigUint64(0, true);
     }
 
-    show_result();
+    function bitsToFloat64 (x) {
+        buffer.setBigUint64(0, x, true);
+        return buffer.getFloat64(0, true);
+    }
+
+    function updateDisplay (x) {
+        S("#decimal").value = x.toString();
+        S("#float32").value = "0x" + floatToBits32(x).toString(16).padStart(8, "0");
+        S("#float64").value = "0x" + floatToBits64(x).toString(16).padStart(16, "0");
+    }
+
+    function changedDecimal () {
+        updateDisplay(parseFloat(S("#decimal").value));
+    }
+
+    function changedFloat32 () {
+        let as_string = S("#float32").value.toLowerCase();
+        if (as_string.startsWith("0x"))
+            as_string = as_string.slice(2);
+        const as_number = bitsToFloat32(parseInt(as_string, 16));
+        updateDisplay(as_number);
+    }
+
+    function changedFloat64 () {
+        let as_string = S("#float32").value.toLowerCase();
+        if (as_string.startsWith("0x"))
+            as_string = as_string.slice(2);
+        const as_number = bitsToFloat64(parseInt(as_string, 16));
+        updateDisplay(as_number);
+    }
+
+    // Somewhat janky way to initialize the text fields
+    window.addEventListener("load", () => {
+        S("#decimal").value = "0";
+        changedDecimal();
+    });
 </script>
