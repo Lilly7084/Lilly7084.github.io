@@ -1,0 +1,194 @@
+<!DOCTYPE html><script src="/static/loader.js"></script>
+----------
+Title: IS-65 Photo gallery and timeline
+LastUpdated: 09 November 2026
+----------
+# IS-65 Photo gallery and timeline
+
+<style> img { max-height: 50vh; } </style>
+
+## October 2025
+**(Photo missing)**
+
+I purchased a total of thirteen chips off of Mouser:
+  - W65C02S CPU
+  - AS6C62256 static RAM
+  - AT28C256 EEPROM
+  - W65C22S Versatile Interface Adapter
+  - W65C51N Asynchronous Communication Interface Adapter
+  - 74HC00 quad 2 input NAND gate
+  - 74HC20 dual 4 input NAND gate
+  - 74HC30 single 8 input NAND gate
+  - 74HC163 4-bit binary counter
+  - MAX232 level shifter for RS-232
+  - Three 74HC595 shift registers
+
+##
+![](20251015_183603.jpg)
+
+Tried building up the machine on a breadboard, got maybe a third of the way
+finished, and quickly realized that this would be too finicky and unreliable,
+since the wires are too easy to bump and the ROM is absolutely buried beneath
+all the flying leads. The project sat dormant for a while, as I tried to come
+up with a better plan.
+
+## March 2026
+![](20260305_165141.jpg)
+
+I decided to try building the computer by wire-wrapping on a perfboard. Shown
+above is one of the early plans for the chip layout, when I wanted to include
+some type of DMA capability for a peripheral I'd probably never end up building
+anyway. This is not the layout I ended up using, but I can't find any photos or
+paper copies of the layout that I settled on. The discarded board (kept in my
+'bin of shame') is shown for illustration:
+
+![](20261109_063713.jpg)
+
+I know I should keep standoffs in the corners to avoid bending or mashing up
+the pins on the wire-wrap sockets, but I don't care; this board is already junk
+and I'm keeping it around for whatever the opposite of sentimental value is.
+
+## May 2026
+![](20260527_131807.jpg)
+
+More components arrived for my wire-wrapping build plan. Power distribution
+would be point to point, but everything else would be built onto 'component
+carriers' (you can see two in the second tube from the right) to plug into the
+same long-tail DIP sockets as all the chips. This plan did fall through in the
+end because I don't have the 'active patience' and attention to detail to wrap
+a wire onto socket pins over a thousand times without getting connections wrong
+and needing to unwrap and redo them over and over. I liked building the
+component carriers, though.
+
+##
+![](20260527_133440.jpg)
+
+Started building up the component carriers. Seen here is the reset circuit.
+
+##
+![](20260527_144139.jpg)
+
+The finished component carriers. The one in the back has two LEDs for reset and
+status, a reset button, and two 4.7k resistors to ground (general pull-downs
+since the resistor array two photos ago has a single common pin on +5 volts).
+The one in the front has the reset circuit based on an **MCP100**, two diodes
+to let me wire-OR the interrupt requests from two VIAs, and a small jumble of
+bits meant to debounce a second button which I didn't even have in the design.
+
+##
+![](20260529_132157.jpg)
+
+The first of a few tests I did before assembling for real. Two Raspberry Pi
+Picos were being used as test equipment; the one on the left is making a clock
+signal since I forgot to buy either of the clock crystals, and the one on the
+right is a logic analyzer. In this setup, I'm using a 74HC163 as a clock
+divider and wait-state generator, and using it to clock the CPU. The CPU's data
+bus is strapped to always read `0xEA` (the NOP opcode) so it keeps counting up
+on its address bus. Address line 0 was connected to the wait-state generator,
+so an extra wait state was generated when it was low. This worked exactly how I
+had expected, which was very satisfying.
+
+## July 2026
+**(Photo missing)**
+
+The special long-tail sockets, prototyping boards, wire wrapping tool, and 30
+AWG wire for wrapping had all come in, so I could start building the computer.
+This... *did not go well*, with socket pins going at weird angles, decoupling
+capacitors getting their legs melted out and needing to be thrown away, wires
+cut too short and needing to be unwrapped and tried again...
+
+I've decided that wire wrapping is cool for configuration stuff that will
+rarely be changed, but I will *never* try to use it again as the construction
+method for an entire circuit again. The project went dormant again until I had
+ordered a custom printed circuit board to build the computer in a cleaner and
+less stressful way.
+
+## August 2026
+![](20260811_121618.jpg)
+
+The PCBs arrived! I ordered the other components I needed (regular sockets,
+more LEDs and buttons and connectors, etc.) at the same time, but they wouldn't
+arrive for another few days. I don't know what information on the label could
+be traced back to my account or location so I decided 'better safe than sorry'
+when redacting it.
+
+##
+![](20260813_092551.jpg)
+
+I'd ordered HASL finish so the pads are all silver, but if I stand it on edge,
+the reflection of my desk makes it look almost like the pads are gold plated!
+
+##
+![](20260815_155834.jpg)
+
+Four days after the boards arrived, the components were also here. But I was
+still exhausted mentally and a bit sick of this project after the failure of
+the wire wrapped version, so I waited until the next day before assembling.
+
+##
+![](20260816_093016.jpg)
+
+The assembled board, before stuffing in any of the chips. The oscillator socket
+was a 14-pin DIP, but I removed the pins that weren't used. I clearly need to
+learn a better technique for that, since one of the pins pricked my finger and
+caused me to bleed a little.
+
+##
+![](20260816_100649.jpg)
+
+Another bit of testing. I had only installed the CPU, ROM, VIA, and just enough
+supporting circuitry to make them work together. The ROM had a short program on
+it that counted up on one of the VIA ports as fast as possible, and I confirmed
+it was doing that using the logic analyzer.
+
+## September 2026
+I started writing some more permanent software for this machine, specifically a
+serial driver, in preparation for a memory monitor.
+
+The serial driver works around a bug in the ACIA where the *transmit data
+register empty* flag is always set, by using timer #2 in the VIA to count down
+baud pulses coming from pin 5 of the ACIA. It also has a 256-byte circular
+buffer for data running in either direction, line ending conversion (`\r`,
+`\n`, `\r\n` received over serial all get converted to `\n` in the receive
+buffer), and hardware flow control (respecting the `/CTS` input and deasserting
+`/RTS` when the receive buffer fills up too much to keep it from overflowing).
+
+I don't have any screenshots of the software side of things, unfortunately.
+
+##
+![](20260914_051059.jpg)
+![](20260914_051109.jpg)
+
+I didn't include LEDs for serial receive and transmit activity in the design,
+but was suddenly really missing them, so I put the extra prototyping / bodge
+area I left on the board to some good use. Tons of space is left, and I have
+some plans that'll probably use up the rest of that later on.
+
+## October 2026
+![](20261029_210511.jpg)
+
+The test setup while developing my memory monitor. The Pico is still used as a
+logic analyzer, but stopped being necessary after a while; it's now just giving
+me 5 volts from its USB port. The monitor is still a bit lacking in features,
+but it can read bytes from memory, poke bytes into memory, and execute code
+from an arbitrary address. Enough for me to say *"yep, that's a computer!"*
+
+![](monitor_screenshot.png)
+
+You can see the monitor working; three tests above:
+ 1. Reading the first 32 bytes of memory, showing some junk state from the
+    initialization and monitor code.
+ 2. Writing a checkerboard pattern into an uninitialized part of memory, and
+    reading it back to show it's stored correctly.
+ 3. Writing a short program into memory (I made a mistake in one of the bytes
+    and just typed in the corrected byte value before hitting space to commit
+    it to memory), reading it back, then executing it.
+
+The test program for the last bit disassembles as:
+```
+20 23 81      JSR $8123            ; "Print immediate" routine from the monitor
+48 65 6c 6c   DB  "Hellorld!", 0   ; Message to be printed
+6f 72 6f 64
+0d 0a 00
+60            RTS                  ; Return to the monitor
+```

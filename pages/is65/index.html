@@ -1,0 +1,225 @@
+<!DOCTYPE html><script src="/static/loader.js"></script>
+----------
+Title: IS-65 Homebrew computer using the 65C02
+LastUpdated: 09 November 2026
+----------
+# IS-65: Homebrew computer using the 65C02
+
+![](20261029_210457.jpg)
+
+This page is about a homebrew computer I designed in 2025 and built in 2026,
+based around the **W65C02S** 8-bit microprocessor. I'm only writing about it
+now, because I keep forgetting to update this site.
+
+You can find a **photo gallery** of this machine [here](photos.html).
+
+## Hardware
+
+The hardware is pretty standard for a 6502 computer, with a few small changes.
+Each portion of the schematic is described in more detail in its own section
+below, with the relevant snippet of the schematic cropped out. The original
+full schematic, which doesn't include any modifications I made after ordering
+the boards, is available [here](schematic.png). It's a bit of a mess, sorry.
+
+### CPU
+![](schematic_cpu.png)
+
+The CPU itself (U1) is a standard 65C02 from Western Design Center, in a 40 pin
+DIP package. The only notably special choice here was that the unused pins
+`/SO` (38) and `BE` (36) were pulled high with 4.7k resistors (inside `RN1`)
+instead of being tied directly to VCC. I did this in case I wanted to use those
+pins later, so I could just tack onto them instead of needing to cut traces.
+The clock outputs aren't used because of how I'm generating the CPU and I/O
+
+### Address decoding
+![](schematic_addrdec.png)
+
+The upper half of this circuit divides the address space into three regions:
+  - `0x0000` thru `0x7EFF`: RAM
+  - `0x7F00` thru `0x7FFF`: I/O devices
+  - `0x8000` thru `0xFFFF`: ROM
+
+I/O devices are further selected by 'one-hot' addressing: Address lines 15 thru
+8 must equal `0x7F` to select any devices (the `/IO` output goes to the active
+low chip select of all I/O devices), lines 7 thru 4 each go to the active high
+chip select of one device, and lines 3 thru 0 are used to select the registers
+within a chip. This does reduce part count by not needing a decoder (74HC138),
+but I don't think it's worth it because of the conflicting address ranges.
+
+As I've designed it, the I/O addresses are:
+  - `0x7F00` thru `0x7F0F`: Open bus
+  - `0x7F10` thru `0x7F1F`: VIA #1
+  - `0x7F20` thru `0x7F2F`: VIA #2 (currently an empty socket, so open bus)
+  - `0x7F30` thru `0x7F3F`: **Conflict!**
+  - `0x7F40` thru `0x7F4F`: ACIA, mirrored 4 times since it has 4 registers
+  - `0x7F50` thru `0x7F7F`: **Conflict!**
+  - `0x7F80` thru `0x7F8F`: Reserved for future use, unsure what to put...
+  - `0x7F90` thru `0x7FFF`: **Conflict!**
+
+Below that is the logic to produce the read and write pulses. Reads are *not*
+qualified by Phi2 since that would take an extra logic gate to do properly
+(avoiding erroneous spikes / 'glitches' on `/Write` during read cycles). A nice
+side effect of this is that the ROM now has twice as long to respond; the chip
+I used has an access time of 150 nanoseconds, and if reads were qualified, that
+would have to fit in half a CPU cycle (specifically the half with `Phi2` high),
+so the max CPU speed would be 3.33 MHz, if you don't have any wait states. With
+reads not qualified, the CPU can instead run at 6.67 MHz without wait states,
+which is good because I'm already running it at 6 MHz.
+
+I designed the machine thinking that I'd still need one wait state for ROM,
+since I made this change halfway through and didn't think about it afterwards,
+so it was a very pleasant surprise to see everything still working perfectly
+when I flipped the switches to run without wait states instead.
+
+Additionally, writes are suppressed for addresses `0xF000` thru `0xFFFF`. The
+idea was that I may write a serial bootloader that's able to reprogram the ROM,
+and I'd want to stuff the bootloader code into that protected region so that an
+error during programming or a misbehaving user program can't corrupt it.
+
+### Memory
+![](schematic_memory.png)
+
+This section is pretty standard, with only one slightly odd decision: `SW1C`
+(the third position on the DIP switch) can be used to connect the write-enable
+line on the EEPROM chip. This was intended for a serial bootloader to be able
+to reprogram the EEPROM. I haven't written any software that uses this feature
+yet, so switch #3 remains open.
+
+### Clock
+![](schematic_clock.png)
+
+There's two overlapping oscillator symbols, one marked as not stuffed, as sort
+of a crude hack to be able to mount either 8- or 14-pin DIP oscillators on the
+board. One symbol is assigned each package and they're overlapping in the PCB
+layout. I shouldn't do that, but it was easier than making a custom footprint
+to have both sets of holes on it.
+
+The oscillator runs at 12 MHz when the CPU is supposed to run at 6 MHz. This is
+divided down to 6 MHz by a 74HC163 counter chip, which I'm also using to add
+wait states by skipping a configurable number of CPU clock pulses when reading
+from the ROM. `SW1A` (DIP switch #1) and `SW1B` (DIP switch #2) select how long
+to wait; the former gives 1 wait state, the latter gives 2. The wait states are
+generated according to this state diagram:
+
+![](wait_states.png)
+
+I definitely went overboard with noise-reduction measures here; the RC filter
+on the oscillator's power input, series resistor on its output, a ferrite bead
+in front of the oscilltor and divider chip... but for some reason I didn't put
+series resistors on the divider output, so I'm not sure that did much good.
+
+### VIAs
+![](schematic_vias.png)
+
+Pretty much nothing new here. I'm using diodes to be able to 'wire-OR' the IRQ
+outputs from the VIAs and ACIA together, but that's a very common thing to do
+already. The devices are enabled by a common I/O select and a one-hot address
+line, as explained in the address decoding section. This is mostly included for
+completeness.
+
+### ACIA
+![](schematic_acia.png)
+
+I have a lot to say about this section, because the W65C51 is... *a mess*.
+
+The *transmit data register empty* flag in the status register is bugged so it
+never clears, so you can't poll the ACIA to know when it's safe to send it
+another byte. The transmit interrupt is derived from this flag, so you can't
+turn it on, or else you'd be getting constant spurious interrupts and wouldn't
+be able to run your main code anymore. So you need to keep track, semi blindly,
+of when the transmitter is running, and have a timer somewhere else to track
+how long it takes to send a character.
+
+I'm using timer #2 in the first VIA for this, by connecting the `RXC` (16x
+baud clock) output from the ACIA to `PB6` (timer 2 pulse input) on the VIA.
+This way, the number of pulses I need to count varies with data word length but
+not with baud rate (in my case I'm using 192 pulses). This connection has to go
+through `SW1F` (DIP switch #6) so I could reuse PB6 for other purposes if I
+don't need to use this feature anymore. `SW1G` (DIP switch #7) instead connects
+`RXC` to `PB7` (timer 1 output), so I could configure the ACIA to not generate
+its own receive clock and feed it a custom baud clock from the VIA timer, for
+example to run the receiver at 31.25k baud (500kHz into `RXC`) to receive MIDI
+messages.
+
+The `/CTS` pin is intended for hardware flow control and blocks the transmitter
+if it's not asserted. The issue is, its state can't be observed by reading the
+ACIA's status register, so if I were to use it as intended I wouldn't know when
+a byte starts transmitting, so the above workaround would no longer work. I'm
+tying it low and using `/DSR` instead, which does nothing on its own but can be
+read and polled by the CPU to handle flow control.
+
+The `/RTS` pin is *almost* just an independent output pin, if you're not using
+the transmit interrupts (which are broken) or transmitting a break (which is
+pretty useless for me anyway). Except, if it's not asserted, the transmitter
+still will not run. This makes sense for the original meaning of this signal --
+instructing a half duplex modem to switch to transmit mode -- but not for the
+modern meaning ('ready to receive'), so I can't use it for that either. I used
+`/DTR` instead, which *is* just an independent output pin, and happens to make
+a nice coordinate pair with `/DSR` which is also being used for flow control.
+
+I had intended to reuse the `/RTS` pin to drive a status LED, but for reasons
+explained above, I can't turn the LED off if I want to keep transmitting. Now
+the status LED is always on, so it's pretty useless.
+
+The `/DCD` input isn't scuffed like everything else; it pauses the receiver,
+which makes sense for a modem's carrier detect output, and can be monitored in
+the status register so you aren't transmitting data into a dead modem call. It
+would work perfectly, but I don't have any use for it, so I tied it low.
+
+`J2` is a 10 pin IDC header, where you plug in a ribbon cable with a female DE9
+on the end. A *female* DE9, since I wired this machine up as a DCE instead of a
+DTE, so it plugs directly into the *male* DE9 on a computer (or a USB serial
+adapter) and pretends to be a modem. To this end, I've tied together pins 1
+(`DCD`), 4 (`DTR`), and 6 (`DSR`) on that header, so when the computer asserts
+`DTR` to say it's ready, it sees `DSR` and `DCD` come on, so it thinks that the
+modem is successfully connected to another modem, and won't complain if I then
+try to talk to the IS-65 through a serial terminal emulator.
+
+### Front panel and reset
+![](schematic_panel.png)
+
+The reset circuitry is incredibly simple, built around an MCP100-450D reset
+supervisor IC. This drives reset low if the voltage being fed into it drops
+below 4.5 volts, and holds it low until it's been higher and stable for at
+least 300 milliseconds. The reset button works by forming a voltage divider
+which cuts the 5 volts (nominal) supply down to 3.84 volts, causing the chip to
+assert reset.
+
+There's also two LEDs; an amber LED which lights up when the processor is being
+reset, and a green one which is lit up by the `/RTS` output of the ACIA. The
+latter *was* supposed to be a general status LED, but is borderline useless now
+as explained in the ACIA section.
+
+A 6 pin socket on the side of the board is intended for a front panel, so I can
+have an external reset button, LEDs, and possibly even power input somewhere
+else on an assembled unit. If power is not to be supplied through the front
+panel header, a screw terminal is also included to feed in +5 volts. Currently,
+I'm feeding it off of my computer's USB power, which, combined with the 0.2-0.3
+volt drop from the Schottky diode I've used for polarity protection, means that
+the IS-65 is actually only running at 4.7 volts, which probably explains the
+occasional spurious resets that I get when moving the setup around.
+
+### GPIO and external interrupts
+![](schematic_gpio.png)
+
+A 40 pin socket on the side of the board brings out all the I/O pins from the
+pair of VIAs that may be installed (ports C and D are actually just ports A and
+B from the currently unpopulated second VIA).
+
+An extra circuit has been added for `PB5` on the first VIA, where its pin may
+instead be used as an active-high non maskable interrupt, for 'hard real-time'
+applications that must run on the rising edge of an external clock signal. I
+intended for that feature to be used on another, upcoming project, which I will
+write about once I actually start building it. The external interrupt feature
+is enabled when `SW1D` (DIP switch #4) is closed and `PB5` on the first VIA is
+driven high (which allows software to disable the real-time interrupts). If the
+external interrupts are not required, `SW1E` (DIP switch #5) can be closed
+instead, to send `PB5` directly out to the header. Do not close both switches
+at the same time, or else a non-maskable interrupt will be generated whenever
+`PB5` is driven high.
+
+## Software
+
+So far, I have written a pretty comprehensive serial driver, and a basic memory
+monitor. I do intend to write up more about the software later on, but it may
+be quite a while still...
